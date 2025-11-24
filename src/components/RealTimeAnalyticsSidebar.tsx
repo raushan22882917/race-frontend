@@ -136,11 +136,12 @@ export function RealTimeAnalyticsSidebar({
                   Immediate Actions
                 </h3>
                 {insights.immediate_actions.map((action: any, idx: number) => {
+                  const priority = (action.priority || 'medium') as 'high' | 'medium' | 'low';
                   const priorityColor = {
                     high: 'text-red-400 border-red-500/30 bg-red-500/10',
                     medium: 'text-yellow-400 border-yellow-500/30 bg-yellow-500/10',
                     low: 'text-green-400 border-green-500/30 bg-green-500/10',
-                  }[action.priority || 'medium'] || 'text-gray-400 border-gray-500/30 bg-gray-500/10';
+                  }[priority] || 'text-gray-400 border-gray-500/30 bg-gray-500/10';
 
                   return (
                     <div
@@ -217,17 +218,19 @@ export function RealTimeAnalyticsSidebar({
                   Risk Assessment
                 </h3>
                 {insights.risk_assessment.map((risk: any, idx: number) => {
+                  const probability = (risk.probability || 'medium') as 'high' | 'medium' | 'low';
+                  const impact = (risk.impact || 'medium') as 'high' | 'medium' | 'low';
                   const probColor = {
                     high: 'bg-red-500/20 text-red-400',
                     medium: 'bg-yellow-500/20 text-yellow-400',
                     low: 'bg-green-500/20 text-green-400',
-                  }[risk.probability || 'medium'] || 'bg-gray-500/20 text-gray-400';
+                  }[probability] || 'bg-gray-500/20 text-gray-400';
 
                   const impactColor = {
                     high: 'bg-red-500/20 text-red-400',
                     medium: 'bg-yellow-500/20 text-yellow-400',
                     low: 'bg-green-500/20 text-green-400',
-                  }[risk.impact || 'medium'] || 'bg-gray-500/20 text-gray-400';
+                  }[impact] || 'bg-gray-500/20 text-gray-400';
 
                   return (
                     <div

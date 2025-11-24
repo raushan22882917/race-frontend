@@ -25,7 +25,7 @@ export function RecordingControl() {
 
   const loadStatus = async () => {
     try {
-      const data = await apiService.getRecordingStatus();
+      const data = await apiService.getRecordingStatus() as RecordingStatus;
       setStatus(data);
       setError(null);
     } catch (err) {

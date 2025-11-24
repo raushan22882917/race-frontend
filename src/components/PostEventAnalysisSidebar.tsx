@@ -41,7 +41,7 @@ export function PostEventAnalysisSidebar({ raceStory, isOpen, onClose }: PostEve
     if (!raceStory) return;
     setLoading(true);
     try {
-      const data = await analysisService.getRaceStory();
+      const data = await analysisService.getRaceStory() as { gemini_insights?: any };
       if (data.gemini_insights) {
         setGeminiInsights(data.gemini_insights);
       }

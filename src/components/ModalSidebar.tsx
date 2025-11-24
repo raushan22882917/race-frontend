@@ -12,6 +12,7 @@ interface ModalSidebarProps {
   onDriverTraining?: () => void;
   onRealTimeAnalytics?: () => void;
   isLeaderboardOpen?: boolean;
+  isChartsOpen?: boolean;
   activeComponent?: string | null;
   onCollapsedChange?: (isCollapsed: boolean) => void;
 }
