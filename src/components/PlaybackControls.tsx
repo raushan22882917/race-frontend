@@ -9,6 +9,11 @@ export function PlaybackControls() {
   const { play, pause, restart } = useTelemetryService();
   const [vehicleInfo, setVehicleInfo] = useState<Record<string, { driver_number?: number; car_number?: number }>>({});
 
+  // Reset vehicles to start position on mount and when paused
+  useEffect(() => {
+    resetVehiclesToStart();
+  }, [resetVehiclesToStart]);
+
   // Load vehicle info with driver numbers
   useEffect(() => {
     const loadVehicleInfo = async () => {
@@ -125,10 +130,13 @@ export function PlaybackControls() {
     e.stopPropagation();
     try {
       await pause();
+      // Reset vehicles to start when paused
+      resetVehiclesToStart();
     } catch (error) {
       console.error('Pause failed:', error);
     }
   };
+
 
   return (
     <div className="fixed bottom-6 left-6 z-50 pointer-events-auto">

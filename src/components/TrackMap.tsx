@@ -1,7 +1,9 @@
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
 import { GoogleMap, useLoadScript, Polyline, Polygon, Marker } from '@react-google-maps/api';
 import trackData from '../data/track.json';
 import { useTelemetryStore } from '../store/telemetryStore';
+import { getTrackProgress } from '../utils/trackPathUtils';
+import { geoToUnity } from '../utils/gpsUtils';
 
 const containerStyle = {
   width: '100%',
@@ -132,11 +134,19 @@ interface TrackMapProps {
   showCheckpoints?: boolean;
 }
 
+interface FinishCelebration {
+  vehicleId: string;
+  position: { lat: number; lng: number };
+  timestamp: number;
+}
+
 export function TrackMap({ vehicles, showStartFinish = true, showCheckpoints = false }: TrackMapProps) {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isMapReady, setIsMapReady] = useState(false);
   const [mapInstance, setMapInstance] = useState<google.maps.Map | null>(null);
-  const { vehiclePaths } = useTelemetryStore();
+  const { vehiclePaths, isPlaying } = useTelemetryStore();
+  const [finishCelebrations, setFinishCelebrations] = useState<FinishCelebration[]>([]);
+  const previousProgress = useRef<Record<string, number>>({});
 
   // Create hardcoded vehicle icon - stylized racing car pointing in direction of travel
   const createVehicleIcon = (color: string, heading: number): google.maps.Icon | undefined => {
@@ -618,62 +628,56 @@ export function TrackMap({ vehicles, showStartFinish = true, showCheckpoints = f
   const startFinishPoint = trackPath[0];
   const finishPoint = trackPath[trackPath.length - 1];
 
-  // Get turn markers from track data with offset positions (to the side of track)
-  const turnMarkers = useMemo(() => {
-    if (!trackData.turns || !Array.isArray(trackData.turns)) return [];
-    
-    // Helper function to calculate perpendicular offset position
-    const calculateOffsetPosition = (
-      point: { lat: number; lng: number },
-      pointIndex: number,
-      offsetDistance: number = 0.00015 // Offset in degrees (approximately 15-20 meters)
-    ): { lat: number; lng: number } => {
-      if (trackPath.length < 2) return point;
-      
-      // Get previous and next points to calculate direction
-      const prevIndex = pointIndex > 0 ? pointIndex - 1 : trackPath.length - 1;
-      const nextIndex = pointIndex < trackPath.length - 1 ? pointIndex + 1 : 0;
-      
-      const prevPoint = trackPath[prevIndex];
-      const nextPoint = trackPath[nextIndex];
-      
-      // Calculate direction vector (from previous to next)
-      const dx = nextPoint.lng - prevPoint.lng;
-      const dy = nextPoint.lat - prevPoint.lat;
-      
-      // Calculate perpendicular vector (rotate 90 degrees: swap and negate one)
-      // Perpendicular to (dx, dy) is (-dy, dx) or (dy, -dx)
-      // We'll use (dy, -dx) to offset to the right side
-      const perpDx = dy;
-      const perpDy = -dx;
-      
-      // Normalize the perpendicular vector
-      const length = Math.sqrt(perpDx * perpDx + perpDy * perpDy);
-      if (length === 0) return point;
-      
-      const normalizedDx = perpDx / length;
-      const normalizedDy = perpDy / length;
-      
-      // Apply offset
-      return {
-        lat: point.lat + normalizedDy * offsetDistance,
-        lng: point.lng + normalizedDx * offsetDistance,
-      };
-    };
-    
-    return trackData.turns.map((turn: any) => {
-      const pointIndex = turn.point;
-      if (pointIndex >= 0 && pointIndex < trackPath.length) {
-        const originalPosition = trackPath[pointIndex];
-        const offsetPosition = calculateOffsetPosition(originalPosition, pointIndex);
-        return {
-          ...turn,
-          position: offsetPosition,
-        };
+  // Clear celebrations and progress when paused
+  useEffect(() => {
+    if (!isPlaying) {
+      setFinishCelebrations([]);
+      previousProgress.current = {};
+    }
+  }, [isPlaying]);
+
+  // Detect finish line crossings
+  useEffect(() => {
+    if (!isPlaying || !vehicles) return;
+
+    Object.entries(vehicles).forEach(([vehicleId, vehicle]) => {
+      if (!vehicle.position || !vehicle.position.lat || !vehicle.position.lng) return;
+
+      try {
+        // Convert GPS position to 3D position for progress calculation
+        const altitude = (vehicle.position as any)?.altitude || 0;
+        const unityPosition = geoToUnity(vehicle.position.lat, vehicle.position.lng, altitude);
+        const currentProgress = getTrackProgress(unityPosition);
+        const previousProg = previousProgress.current[vehicleId] ?? 0;
+
+        // Detect finish line crossing: progress goes from > 0.9 back to < 0.1
+        // This means vehicle completed a lap
+        if (previousProg > 0.9 && currentProgress < 0.1 && previousProg !== 0) {
+          // Vehicle crossed finish line!
+          setFinishCelebrations((prev) => [
+            ...prev,
+            {
+              vehicleId,
+              position: {
+                lat: vehicle.position.lat,
+                lng: vehicle.position.lng,
+              },
+              timestamp: Date.now(),
+            },
+          ]);
+
+          // Remove celebration after 5 seconds
+          setTimeout(() => {
+            setFinishCelebrations((prev) => prev.filter((c) => c.vehicleId !== vehicleId || c.timestamp !== Date.now()));
+          }, 5000);
+        }
+
+        previousProgress.current[vehicleId] = currentProgress;
+      } catch (error) {
+        console.warn(`Error detecting finish for vehicle ${vehicleId}:`, error);
       }
-      return null;
-    }).filter(Boolean);
-  }, [trackPath]);
+    });
+  }, [vehicles, isPlaying]);
 
   // Checkpoint markers (every 10 points)
   const checkpoints = useMemo(() => {
@@ -870,48 +874,6 @@ export function TrackMap({ vehicles, showStartFinish = true, showCheckpoints = f
           </>
         )}
 
-        {/* Turn Markers - All turns T1-T15, T7a, T7b, T14a with orange boxes like image */}
-        {turnMarkers.length > 0 && turnMarkers.map((turn: any) => {
-          if (!turn || !turn.position) return null;
-          
-          try {
-            const googleMaps = window.google?.maps;
-            if (!googleMaps) {
-              return null;
-            }
-            
-            // Determine if it's a sub-turn (T7a, T7b, T14a)
-            const isSubTurn = turn.id.includes('a') || turn.id.includes('b');
-            const labelWidth = isSubTurn ? 42 : 38;
-            const labelHeight = isSubTurn ? 24 : 28;
-            
-            // Create orange box icon only (no text)
-            const turnIconUrl = 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
-              <svg width="${labelWidth}" height="${labelHeight}" xmlns="http://www.w3.org/2000/svg">
-                <rect width="${labelWidth}" height="${labelHeight}" fill="#FF6B00" stroke="#000000" stroke-width="2.5" rx="4"/>
-              </svg>
-            `);
-            
-            return (
-              <Marker
-                key={`turn-${turn.id}`}
-                position={turn.position}
-                icon={{
-                  url: turnIconUrl,
-                  scaledSize: new googleMaps.Size(labelWidth, labelHeight),
-                  anchor: new googleMaps.Point(labelWidth / 2, labelHeight / 2),
-                }}
-                title={`${turn.name || turn.id} - ${turn.id}`}
-                zIndex={150}
-                visible={true}
-              />
-            );
-          } catch (error) {
-            console.warn(`Error creating turn marker ${turn.id}:`, error);
-            return null;
-          }
-        })}
-
         {/* Checkpoint Markers */}
         {checkpoints.map((checkpoint, idx) => {
           try {
@@ -1048,6 +1010,51 @@ export function TrackMap({ vehicles, showStartFinish = true, showCheckpoints = f
             })}
           </>
         )}
+
+        {/* Finish Line Celebrations */}
+        {finishCelebrations.map((celebration) => {
+          const vehicle = vehicles?.[celebration.vehicleId];
+          if (!vehicle) return null;
+
+          const googleMaps = window.google?.maps;
+          if (!googleMaps) return null;
+
+          // Create celebration icon
+          const celebrationIconUrl = 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
+            <svg width="120" height="120" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <radialGradient id="grad">
+                  <stop offset="0%" stop-color="#FFD700" />
+                  <stop offset="100%" stop-color="#FF6B00" />
+                </radialGradient>
+                <filter id="glow">
+                  <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+                  <feMerge>
+                    <feMergeNode in="coloredBlur"/>
+                    <feMergeNode in="SourceGraphic"/>
+                  </feMerge>
+                </filter>
+              </defs>
+              <circle cx="60" cy="60" r="55" fill="url(#grad)" stroke="#FFD700" stroke-width="4" filter="url(#glow)"/>
+              <text x="60" y="50" font-size="40" text-anchor="middle" fill="white">🏁</text>
+              <text x="60" y="85" font-size="16" font-weight="bold" text-anchor="middle" fill="white">FINISH!</text>
+            </svg>
+          `);
+
+          return (
+            <Marker
+              key={`celebration-${celebration.vehicleId}-${celebration.timestamp}`}
+              position={celebration.position}
+              icon={{
+                url: celebrationIconUrl,
+                scaledSize: new googleMaps.Size(120, 120),
+                anchor: new googleMaps.Point(60, 60),
+              }}
+              zIndex={2000}
+              title={`Vehicle #${celebration.vehicleId} - Reached Finish Line!`}
+            />
+          );
+        })}
         
        
       </GoogleMap>
