@@ -238,12 +238,15 @@ export function Performance() {
     // Add AI recommendations from insights
     if (aiInsights?.recommendations) {
       aiInsights.recommendations.forEach((rec: any) => {
+        const expectedImprovement = typeof rec.expected_improvement === 'object' 
+          ? (rec.expected_improvement?.expected_improvement || rec.expected_improvement?.rate_per_lap || null)
+          : rec.expected_improvement;
         recs.push({
           type: rec.priority === 'high' ? 'error' : rec.priority === 'medium' ? 'warning' : 'success',
           title: rec.title,
           description: rec.description,
-          action: rec.action_items?.join('; ') || rec.expected_improvement,
-          potentialGain: rec.expected_improvement || null,
+          action: rec.action_items?.join('; ') || (typeof expectedImprovement === 'string' || typeof expectedImprovement === 'number' ? expectedImprovement : null),
+          potentialGain: expectedImprovement || null,
           category: rec.category || 'Training',
           priority: rec.priority === 'high' ? 1 : rec.priority === 'medium' ? 2 : 3,
           actionItems: rec.action_items || [],
@@ -254,12 +257,15 @@ export function Performance() {
     // Add improvement opportunities
     if (improvements?.opportunities) {
       improvements.opportunities.forEach((opp: any) => {
+        const expectedImprovement = typeof opp.expected_improvement === 'object' 
+          ? (opp.expected_improvement?.expected_improvement || opp.expected_improvement?.rate_per_lap || null)
+          : opp.expected_improvement;
         recs.push({
           type: opp.priority === 'high' ? 'error' : 'warning',
           title: opp.title || opp.description,
           description: opp.description || opp.recommendation,
           action: opp.recommendation || opp.action_items?.join('; '),
-          potentialGain: opp.potential_gain || opp.expected_improvement || null,
+          potentialGain: opp.potential_gain || expectedImprovement || null,
           category: opp.category || 'Improvement',
           priority: opp.priority === 'high' ? 1 : opp.priority === 'medium' ? 2 : 3,
           actionItems: opp.action_items || [],
@@ -784,7 +790,13 @@ export function Performance() {
                         )}
                         {opp.expected_improvement && (
                           <p className="text-[#0bda57] text-sm font-semibold mt-3">
-                            Expected improvement: {opp.expected_improvement}
+                            Expected improvement: {typeof opp.expected_improvement === 'object' 
+                              ? (opp.expected_improvement.expected_improvement || 
+                                 (opp.expected_improvement.rate_per_lap 
+                                   ? `${opp.expected_improvement.direction || 'Improvement'}: ${opp.expected_improvement.rate_per_lap}`
+                                   : null) ||
+                                 String(opp.expected_improvement))
+                              : String(opp.expected_improvement)}
                           </p>
                         )}
                       </div>

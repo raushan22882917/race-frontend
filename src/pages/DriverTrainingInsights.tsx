@@ -1781,7 +1781,13 @@ export function DriverTrainingInsights() {
                                 )}
                                 {rec.expected_improvement && (
                                   <p className="text-[#0bda57] text-xs font-semibold mt-2">
-                                    Expected: {rec.expected_improvement}
+                                    Expected: {typeof rec.expected_improvement === 'object' 
+                                      ? (rec.expected_improvement.expected_improvement || 
+                                         (rec.expected_improvement.rate_per_lap 
+                                           ? `${rec.expected_improvement.direction || 'Improvement'}: ${rec.expected_improvement.rate_per_lap}`
+                                           : null) ||
+                                         String(rec.expected_improvement))
+                                      : String(rec.expected_improvement)}
                                   </p>
                                 )}
                               </div>
