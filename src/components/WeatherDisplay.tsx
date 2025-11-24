@@ -22,10 +22,10 @@ export function WeatherDisplay() {
   if (!weather) return null;
 
   const weatherCondition = inferWeatherCondition(
-    weather.air_temp,
-    weather.humidity,
-    weather.wind_speed,
-    weather.rain
+    weather.air_temp ?? undefined,
+    weather.humidity ?? undefined,
+    weather.wind_speed ?? undefined,
+    weather.rain ?? undefined
   );
 
   const getWeatherIcon = () => {
@@ -60,24 +60,11 @@ export function WeatherDisplay() {
   };
 
   return (
-    <div className="bg-gray-800 bg-opacity-90 rounded-lg p-4">
-      <div className="flex items-center gap-2 mb-2">
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={weatherEnabled}
-            onChange={(e) => setWeatherEnabled(e.target.checked)}
-            className="w-4 h-4"
-          />
-          <span className="text-sm">Weather Effects</span>
-        </label>
-      </div>
-
+    <div className="p-4">
       {weatherEnabled && (
         <div className="flex items-center gap-3">
           {getWeatherIcon()}
           <div>
-            <div className="text-sm font-semibold">{getWeatherConditionLabel()}</div>
             <div className="text-xs text-gray-400">
               {weather.air_temp?.toFixed(1)}°C | {weather.humidity?.toFixed(0)}% |{' '}
               {weather.wind_speed?.toFixed(1)} m/s

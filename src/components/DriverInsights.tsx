@@ -19,11 +19,7 @@ export function DriverInsights() {
   const insights = analyzeDriverPerformance(vehicleLaps, selectedVehicleId);
 
   if (vehicleLaps.length === 0) {
-    return (
-      <div className="bg-gray-800 bg-opacity-90 rounded-lg p-4">
-        <div className="text-sm text-gray-400">No lap data available for analysis</div>
-      </div>
-    );
+    return null;
   }
 
   const formatTime = (seconds: number | null | undefined): string => {

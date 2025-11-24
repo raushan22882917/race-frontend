@@ -1,11 +1,16 @@
+import { useState, useEffect, useCallback } from 'react';
 import { usePolling } from '../hooks/usePolling';
 import { useTelemetryStore } from '../store/telemetryStore';
-import { TelemetryFrame, ControlMessage } from '../types/telemetry';
+import { ControlMessage } from '../types/telemetry';
 import { geoToUnity, setReference } from '../utils/gpsUtils';
+import { projectToTrackPath, initializeTrackPoints } from '../utils/trackPathUtils';
 import { apiService } from './apiService';
 
 // Set GPS reference (from Unity code)
 setReference(33.530494689941406, -86.62052154541016, 1.0);
+
+// Initialize track points when module loads
+initializeTrackPoints();
 
 // Polling interval: 100ms = 10Hz (recommended for real-time telemetry)
 const TELEMETRY_POLL_INTERVAL = 100;
@@ -21,12 +26,20 @@ export function useTelemetryServiceWS() {
     setPlaybackSpeed,
   } = useTelemetryStore();
 
-  const { data, isLoading, error } = usePolling<any>({
-    fetchFn: () => apiService.getTelemetry(),
+  const [hasReceivedData, setHasReceivedData] = useState(false);
+  
+  // Stable fetch function reference - accepts abort signal from usePolling
+  const fetchTelemetry = useCallback((signal?: AbortSignal) => {
+    return apiService.getTelemetry(signal);
+  }, []);
+  
+  const { isLoading, error } = usePolling<any>({
+    fetchFn: fetchTelemetry,
     interval: TELEMETRY_POLL_INTERVAL,
     enabled: true,
     immediate: true,
     onData: (frame: any) => {
+      setHasReceivedData(true);
       // Handle different message types
       if (frame.type === 'connected') {
         console.log('Telemetry data available:', frame);
@@ -41,6 +54,11 @@ export function useTelemetryServiceWS() {
 
         // Update vehicles
         if (frame.vehicles) {
+          const vehicleCount = Object.keys(frame.vehicles).length;
+          if (vehicleCount > 0) {
+            console.log(`📡 Received ${vehicleCount} vehicle(s) in telemetry frame:`, Object.keys(frame.vehicles));
+          }
+          
           Object.entries(frame.vehicles).forEach(([vehicleId, telemetry]: [string, any]) => {
             // Extract GPS coordinates if available
             const lat = telemetry.gps_lat;
@@ -48,15 +66,24 @@ export function useTelemetryServiceWS() {
             const altitude = telemetry.altitude || 0;
 
             let position = undefined;
+            let rotation = undefined;
+            
             if (lat != null && lon != null && !isNaN(lat) && !isNaN(lon)) {
-              position = geoToUnity(lat, lon, altitude);
+              // Convert GPS to 3D position
+              const rawPosition = geoToUnity(lat, lon, altitude);
+              
+              // Project onto track path centerline to ensure vehicle follows exact track coordinates
+              // This returns both position (on centerline) and rotation (direction along track)
+              const projected = projectToTrackPath(rawPosition);
+              position = projected.position;
+              rotation = { x: 0, y: projected.rotation, z: 0 };
             }
 
             // Always update vehicle, even without GPS coordinates
             updateVehicle(vehicleId, {
               ...telemetry,
               timestamp: frame.timestamp,
-            }, position);
+            }, position, rotation);
           });
         } else {
           console.warn('Telemetry frame has no vehicles');
@@ -117,9 +144,9 @@ export function useTelemetryServiceWS() {
     }
   };
 
-  // Return connection status based on polling state
+  // Return connection status - consider connected if we've received data or no error
   return {
-    isConnected: !error && !isLoading,
+    isConnected: hasReceivedData || (!error),
     play,
     pause,
     reverse,

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 
 export interface UsePollingOptions<T> {
-  fetchFn: () => Promise<T>;
+  fetchFn: (signal?: AbortSignal) => Promise<T>;
   interval: number; // Polling interval in milliseconds
   enabled?: boolean; // Control whether polling is enabled
   onData?: (data: T) => void; // Callback when new data arrives
@@ -26,30 +26,50 @@ export function usePolling<T = any>(options: UsePollingOptions<T>) {
   const isMountedRef = useRef(true);
   const onDataRef = useRef(onData);
   const onErrorRef = useRef(onError);
+  const fetchFnRef = useRef(fetchFn);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const isFetchingRef = useRef(false);
 
-  // Update refs when callbacks change
+  // Update refs when callbacks change (without causing re-renders)
   useEffect(() => {
     onDataRef.current = onData;
     onErrorRef.current = onError;
-  }, [onData, onError]);
+    fetchFnRef.current = fetchFn;
+  }, [onData, onError, fetchFn]);
 
   const fetchData = useCallback(async () => {
-    if (!enabled || !isMountedRef.current) {
+    if (!enabled || !isMountedRef.current || isFetchingRef.current) {
       return;
     }
 
+    // Cancel any pending request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+
+    // Create new abort controller for this request
+    const currentAbortController = new AbortController();
+    abortControllerRef.current = currentAbortController;
+    isFetchingRef.current = true;
     setIsLoading(true);
     setError(null);
 
     try {
-      const result = await fetchFn();
-      if (isMountedRef.current) {
+      // Pass the abort signal to fetchFn so it can cancel the request
+      const result = await fetchFnRef.current(currentAbortController.signal);
+      // Only update state if this request wasn't aborted and component is still mounted
+      if (isMountedRef.current && !currentAbortController.signal.aborted && abortControllerRef.current === currentAbortController) {
         setData(result);
         onDataRef.current?.(result);
       }
     } catch (err) {
-      const error = err instanceof Error ? err : new Error(String(err));
-      if (isMountedRef.current) {
+      // Don't set error if request was aborted or component unmounted
+      if (currentAbortController.signal.aborted || !isMountedRef.current) {
+        return;
+      }
+      // Only set error if this is still the current request
+      if (abortControllerRef.current === currentAbortController) {
+        const error = err instanceof Error ? err : new Error(String(err));
         setError(error);
         onErrorRef.current?.(error);
       }
@@ -57,13 +77,26 @@ export function usePolling<T = any>(options: UsePollingOptions<T>) {
       if (isMountedRef.current) {
         setIsLoading(false);
       }
+      // Only clear fetching flag if this is still the current request
+      if (abortControllerRef.current === currentAbortController) {
+        isFetchingRef.current = false;
+      }
     }
-  }, [fetchFn, enabled]);
+  }, [enabled]);
 
   useEffect(() => {
     isMountedRef.current = true;
 
     if (!enabled) {
+      // Clean up if disabled
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
       return;
     }
 
@@ -83,6 +116,11 @@ export function usePolling<T = any>(options: UsePollingOptions<T>) {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
       }
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+      isFetchingRef.current = false;
     };
   }, [fetchData, interval, enabled, immediate]);
 
@@ -91,6 +129,11 @@ export function usePolling<T = any>(options: UsePollingOptions<T>) {
       clearInterval(intervalRef.current);
       intervalRef.current = null;
     }
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    isFetchingRef.current = false;
   }, []);
 
   const startPolling = useCallback(() => {

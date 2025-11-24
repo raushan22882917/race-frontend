@@ -117,9 +117,7 @@ export function useWebSocket<T = any>(options: UseWebSocketOptions) {
           1003: 'Unsupported data',
           1006: 'Abnormal closure (no close frame) - Connection refused or network error',
           1011: 'Server error',
-          1015: 'TLS handshake failure',
-          1002: 'Protocol error',
-          1003: 'Unsupported data type'
+          1015: 'TLS handshake failure'
         };
         
         // Log unexpected closures - always log first failure

@@ -1,23 +1,28 @@
 /**
  * API Configuration
- * All services run on integrated FastAPI server (port 8000)
+ * All services run on integrated FastAPI server (port 8001)
  * Using REST API with polling for real-time data streaming
  * 
  * Backend URL can be configured via environment variable:
- * - VITE_API_BASE_URL (defaults to http://127.0.0.1:8000/)
+ * - VITE_API_BASE_URL (defaults to http://127.0.0.1:8001/)
  */
 
-// Get base URL from environment variable or use default
+// Get base URL from environment variable (.env file)
+// Vite automatically loads .env file variables into import.meta.env
 const getBaseUrl = (): string => {
-  // Vite uses import.meta.env for environment variables
+  // Vite uses import.meta.env for environment variables from .env file
   const envUrl = import.meta.env.VITE_API_BASE_URL;
+  
   if (envUrl && typeof envUrl === 'string' && envUrl.trim() !== '') {
     // Remove trailing slash if present
-    return envUrl.trim().replace(/\/$/, '');
+    const url = envUrl.trim().replace(/\/$/, '');
+    console.log(`✅ Using API Base URL from .env: ${url}`);
+    return url;
   }
-  // Default to localhost:8000
-  // This ensures consistent hostname between frontend (localhost:3000) and backend (localhost:8000)
-  return 'http://127.0.0.1:8000/';
+  
+  // Fallback default (should not be used if .env is configured correctly)
+  console.warn('⚠️ VITE_API_BASE_URL not found in .env, using default port 8001');
+  return 'http://127.0.0.1:8001';
 };
 
 const BASE_URL = getBaseUrl();
@@ -33,6 +38,31 @@ export const API_CONFIG = {
     ENDURANCE: '/api/endurance',
     LEADERBOARD: '/api/leaderboard',
     CONTROL: '/api/control',
+    VEHICLES: '/api/vehicles',
+    
+    // Post-Event Analysis
+    ANALYSIS: {
+      RACE_STORY: '/api/analysis/race-story',
+      SECTOR_COMPARISON: '/api/analysis/sector-comparison',
+      DRIVER_INSIGHTS: '/api/analysis/driver',
+    },
+    
+    // Driver Training & Insights
+    DRIVER: {
+      RACING_LINE: '/api/driver',
+      BRAKING: '/api/driver',
+      CORNERING: '/api/driver',
+      IMPROVEMENTS: '/api/driver',
+    },
+    
+    // Real-Time Analytics
+    REALTIME: {
+      GAPS: '/api/realtime/gaps',
+      PIT_WINDOW: '/api/realtime/pit-window',
+      STRATEGY: '/api/realtime/strategy',
+      TIRE_DEGRADATION: '/api/realtime/tire-degradation',
+      STRATEGY_INSIGHTS: '/api/realtime/strategy-insights',
+    },
   },
 };
 
