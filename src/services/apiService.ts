@@ -56,6 +56,31 @@ class ApiService {
       }
 
       if (!response.ok) {
+        // Handle specific HTTP status codes
+        if (response.status === 503) {
+          const isDevelopment = import.meta.env.DEV;
+          // Show the actual URL being requested
+          const actualUrl = this.baseUrl ? `${this.baseUrl}${endpoint}` : endpoint;
+          const backendInfo = isDevelopment 
+            ? `Proxied to: https://hack-the-track-backend-821372121985.europe-west1.run.app${endpoint}`
+            : `Backend: ${this.baseUrl || 'unknown'}`;
+          
+          const errorMsg = `Service Unavailable (503): The backend endpoint ${endpoint} is currently unavailable.\n\n` +
+            `Possible reasons:\n` +
+            `- The endpoint is temporarily overloaded\n` +
+            `- The service needs to be initialized (e.g., no race data yet)\n` +
+            `- The backend service for this endpoint is down\n\n` +
+            `${backendInfo}\n` +
+            `Mode: ${isDevelopment ? 'Development (using proxy)' : 'Production'}\n` +
+            `Request URL: ${actualUrl}`;
+          throw new Error(errorMsg);
+        }
+        if (response.status === 404) {
+          throw new Error(`Not Found (404): Endpoint ${endpoint} does not exist`);
+        }
+        if (response.status === 403) {
+          throw new Error(`Forbidden (403): Access denied to ${endpoint}`);
+        }
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
@@ -77,8 +102,25 @@ class ApiService {
           // Silently rethrow abort errors for polling requests
           throw error;
         }
+        // Check for CORS errors
         if (error.message.includes('Failed to fetch') || error.message.includes('ERR_INSUFFICIENT_RESOURCES')) {
-          console.warn(`API request failed (network/resource issue): ${endpoint}`, error.message);
+          const isCorsError = error.message.includes('CORS') || error.message.includes('Access-Control');
+          if (isCorsError) {
+            console.error(`❌ CORS Error: Backend is not allowing requests from this origin.`, error.message);
+            console.error(`   Frontend origin: ${typeof window !== 'undefined' ? window.location.origin : 'unknown'}`);
+            console.error(`   Backend URL: ${this.baseUrl || 'unknown'}`);
+            console.error(`   Fix: Configure backend CORS to allow: ${typeof window !== 'undefined' ? window.location.origin : 'your-frontend-origin'}`);
+          } else {
+            console.warn(`API request failed (network/resource issue): ${endpoint}`, error.message);
+          }
+        } else if (error.message.includes('503')) {
+          // For 503 errors, log at warning level for polling requests (they're expected to retry)
+          // But log at error level for non-polling requests
+          if (isPollingRequest) {
+            console.warn(`⚠️ Backend endpoint unavailable (503): ${endpoint} - Will retry on next poll`);
+          } else {
+            console.error(`❌ Backend endpoint unavailable (503): ${endpoint}`, error.message);
+          }
         } else {
           console.error(`API request failed: ${endpoint}`, error);
         }

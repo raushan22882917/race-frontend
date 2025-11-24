@@ -10,7 +10,17 @@
 // Get base URL from environment variable (.env file)
 // Vite automatically loads .env file variables into import.meta.env
 const getBaseUrl = (): string => {
-  // Vite uses import.meta.env for environment variables from .env file
+  // In development mode, use relative URLs so Vite proxy works
+  // This avoids CORS issues during local development
+  const isDevelopment = import.meta.env.DEV || import.meta.env.MODE === 'development';
+  
+  if (isDevelopment) {
+    // Use empty string for relative URLs - Vite proxy will handle it
+    console.log('🔧 Development mode: Using relative URLs (Vite proxy enabled)');
+    return '';
+  }
+  
+  // In production, use the configured backend URL
   const envUrl = import.meta.env.VITE_API_BASE_URL;
   
   if (envUrl && typeof envUrl === 'string' && envUrl.trim() !== '') {

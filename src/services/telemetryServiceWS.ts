@@ -95,7 +95,20 @@ export function useTelemetryServiceWS() {
       // Silently ignore unknown frame types
     },
     onError: (error) => {
-      console.error('Telemetry polling error:', error);
+      // For 503 errors, just log a warning (already logged in apiService)
+      // Don't spam console with repeated 503 errors during polling
+      const is503Error = error instanceof Error && error.message.includes('503');
+      if (is503Error) {
+        // Only log once per minute to reduce noise
+        const now = Date.now();
+        const last503Log = (window as any).__lastTelemetry503Log || 0;
+        if (now - last503Log > 60000) { // Log max once per minute
+          console.warn('⚠️ Telemetry endpoint unavailable (503) - Will continue retrying. This is normal if no race data exists yet.');
+          (window as any).__lastTelemetry503Log = now;
+        }
+      } else {
+        console.error('Telemetry polling error:', error);
+      }
     },
   });
 
@@ -104,7 +117,13 @@ export function useTelemetryServiceWS() {
       await apiService.sendControlCommand({ type: 'control', cmd: 'play' } as ControlMessage);
       setPlaying(true);
     } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
       console.error('Failed to send play command:', error);
+      // Don't update state if command failed
+      if (errorMsg.includes('503')) {
+        console.warn('⚠️ Control endpoint unavailable (503). The backend may need race data to be initialized first.');
+      }
+      throw error; // Re-throw so callers can handle it
     }
   };
 
@@ -113,7 +132,13 @@ export function useTelemetryServiceWS() {
       await apiService.sendControlCommand({ type: 'control', cmd: 'pause' } as ControlMessage);
       setPaused(true);
     } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
       console.error('Failed to send pause command:', error);
+      // Don't update state if command failed
+      if (errorMsg.includes('503')) {
+        console.warn('⚠️ Control endpoint unavailable (503). The backend may need race data to be initialized first.');
+      }
+      throw error; // Re-throw so callers can handle it
     }
   };
 
@@ -122,7 +147,12 @@ export function useTelemetryServiceWS() {
       await apiService.sendControlCommand({ type: 'control', cmd: 'reverse' } as ControlMessage);
       setPlaying(true);
     } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
       console.error('Failed to send reverse command:', error);
+      if (errorMsg.includes('503')) {
+        console.warn('⚠️ Control endpoint unavailable (503). The backend may need race data to be initialized first.');
+      }
+      throw error;
     }
   };
 
@@ -131,7 +161,12 @@ export function useTelemetryServiceWS() {
       await apiService.sendControlCommand({ type: 'control', cmd: 'restart' } as ControlMessage);
       setPlaying(true);
     } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
       console.error('Failed to send restart command:', error);
+      if (errorMsg.includes('503')) {
+        console.warn('⚠️ Control endpoint unavailable (503). The backend may need race data to be initialized first.');
+      }
+      throw error;
     }
   };
 
@@ -140,7 +175,12 @@ export function useTelemetryServiceWS() {
       await apiService.sendControlCommand({ type: 'control', cmd: 'speed', value: speed } as ControlMessage);
       setPlaybackSpeed(speed);
     } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
       console.error('Failed to send speed command:', error);
+      if (errorMsg.includes('503')) {
+        console.warn('⚠️ Control endpoint unavailable (503). The backend may need race data to be initialized first.');
+      }
+      throw error;
     }
   };
 

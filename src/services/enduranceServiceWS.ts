@@ -35,7 +35,18 @@ export function useEnduranceServiceWS() {
 
   // Stable onError callback
   const handleError = useCallback((error: Error) => {
-    console.error('Endurance polling error:', error);
+    // For 503 errors, reduce console noise (already logged in apiService)
+    const is503Error = error.message.includes('503');
+    if (is503Error) {
+      const now = Date.now();
+      const last503Log = (window as any).__lastEndurance503Log || 0;
+      if (now - last503Log > 60000) { // Log max once per minute
+        console.warn('⚠️ Endurance endpoint unavailable (503) - Will continue retrying. This is normal if no race data exists yet.');
+        (window as any).__lastEndurance503Log = now;
+      }
+    } else {
+      console.error('Endurance polling error:', error);
+    }
   }, []);
 
   const { isLoading, error } = usePolling<any>({

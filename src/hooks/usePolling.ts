@@ -70,7 +70,13 @@ export function usePolling<T = any>(options: UsePollingOptions<T>) {
       // Only set error if this is still the current request
       if (abortControllerRef.current === currentAbortController) {
         const error = err instanceof Error ? err : new Error(String(err));
-        setError(error);
+        // Don't set error state for 503s during polling - they're expected and will retry
+        // The error is already logged as a warning in apiService
+        const is503Error = error.message.includes('503') || error.message.includes('Service Unavailable');
+        if (!is503Error) {
+          setError(error);
+        }
+        // Always call onError callback so services can handle it
         onErrorRef.current?.(error);
       }
     } finally {
