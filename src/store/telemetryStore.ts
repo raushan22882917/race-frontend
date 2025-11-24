@@ -63,7 +63,7 @@ interface TelemetryState {
   reset: () => void;
 }
 
-const initialState = {
+const initialState: Omit<TelemetryState, 'updateVehicle' | 'updateLeaderboardFromVehicles' | 'addVehiclePathPoint' | 'clearVehiclePath' | 'autoSelectFirstVehicle' | 'setSelectedVehicle' | 'setShowAllVehicles' | 'setWeather' | 'setWeatherEnabled' | 'setPlaying' | 'setPaused' | 'setPlaybackSpeed' | 'addLapEvent' | 'updateLeaderboard' | 'resetVehiclesToStart' | 'setShowVehiclePaths' | 'setShowGrid' | 'setShowCheckpoints' | 'setShowTurnMarkers' | 'setShowCenterLine' | 'setShowTrackEdges' | 'setCameraPreset' | 'reset'> = {
   vehicles: {},
   selectedVehicleId: null,
   showAllVehicles: true, // Default to showing all vehicles
@@ -82,7 +82,7 @@ const initialState = {
   showTurnMarkers: true,
   showCenterLine: true,
   showTrackEdges: false, // Disabled by default - only show single inside line
-  cameraPreset: 'top-down',
+  cameraPreset: 'top-down' as const,
 };
 
 export const useTelemetryStore = create<TelemetryState>((set) => ({
@@ -260,13 +260,15 @@ export const useTelemetryStore = create<TelemetryState>((set) => ({
             vehicle: existing?.vehicle || entry.vehicleId,
             position: idx + 1,
             laps: entry.lap,
-            lap_time: existing?.lap_time || null,
             best_lap_time: existing?.best_lap_time || null,
             best_lap_kph: existing?.best_lap_kph || 0,
+            best_lap_num: existing?.best_lap_num || 0,
             gap_first: existing?.gap_first || null,
             gap_previous: existing?.gap_previous || null,
             elapsed: existing?.elapsed || null,
             type: 'leaderboard_entry' as const,
+            pic: existing?.pic || 0,
+            class_type: existing?.class_type || null,
             _totalProgress: entry.progress,
           } as LeaderboardEntry;
         });

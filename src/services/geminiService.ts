@@ -124,9 +124,9 @@ const getPageContext = (activeComponent: string | null = null): string => {
     state.leaderboard.slice(0, 5).forEach((entry) => {
       const bestLapTime = entry.best_lap_time;
       const formattedBestLap = bestLapTime 
-        ? (typeof bestLapTime === 'number' ? bestLapTime.toFixed(2) : parseFloat(bestLapTime.toString()).toFixed(2))
+        ? parseFloat(bestLapTime).toFixed(2)
         : 'N/A';
-      context.push(`  Position ${entry.position}: Vehicle ${entry.vehicle_id}, Lap ${entry.lap}, Best Lap ${formattedBestLap}s`);
+      context.push(`  Position ${entry.position}: Vehicle ${entry.vehicle_id}, Lap ${entry.laps}, Best Lap ${formattedBestLap}s`);
     });
   }
   
