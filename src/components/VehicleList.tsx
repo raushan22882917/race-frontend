@@ -2,58 +2,103 @@ import { useState, useMemo } from 'react';
 import { useTelemetryStore } from '../store/telemetryStore';
 import { Car, ChevronLeft, ChevronRight } from 'lucide-react';
 
-// Get vehicle image path based on vehicle ID - tries both .png and .jpg
-function getVehicleImagePath(vehicleId: string): string {
+// Vehicle colors for icons - matching TrackMap colors
+const VEHICLE_COLORS: Record<string, string> = {
+  '13': '#ef4444', // Red
+  '22': '#10b981', // Green
+  '46': '#f59e0b', // Orange
+  '88': '#8b5cf6', // Purple
+  '51': '#ec4899', // Pink
+  '2': '#f97316',  // Orange-red
+  '3': '#14b8a6',  // Teal
+  '5': '#a855f7',  // Violet
+  '7': '#eab308',  // Yellow
+  '16': '#dc2626', // Dark red
+  '18': '#059669', // Emerald
+  '21': '#d97706', // Amber
+  '26': '#f43f5e', // Rose
+  '31': '#7c3aed', // Deep purple
+  '47': '#06b6d4', // Cyan
+  '55': '#84cc16', // Lime
+  '72': '#6366f1', // Indigo
+  '78': '#fbbf24', // Amber yellow
+  '80': '#14b8a6', // Teal
+  '93': '#f97316', // Orange-red
+  '98': '#ec4899', // Pink
+  '113': '#a855f7', // Violet
+  '4': '#fbbf24',  // Yellow
+  '6': '#dc2626',  // Dark red
+  '10': '#059669', // Emerald
+  '15': '#d97706', // Amber
+  '30': '#f43f5e', // Rose
+  '33': '#7c3aed', // Deep purple
+  '36': '#06b6d4', // Cyan
+  '38': '#84cc16', // Lime
+  '40': '#6366f1', // Indigo
+  '49': '#fbbf24', // Yellow
+  '60': '#dc2626', // Dark red
+  '63': '#059669', // Emerald
+  '65': '#d97706', // Amber
+};
+
+// Function to get vehicle color from vehicleId
+const getVehicleColor = (vehicleId: string): string => {
   const parts = vehicleId.split('-');
-  let baseName = '';
   
-  if (parts.length >= 3) {
-    baseName = `${parts[0]}-${parts[1]}-${parts[2]}`;
-  } else {
-    const vehicleNumber = parts[parts.length - 1];
-    baseName = `GR86-${vehicleNumber.padStart(3, '0')}-${vehicleNumber}`;
+  // Try last part as vehicle number
+  if (parts.length > 0) {
+    const lastPart = parts[parts.length - 1];
+    if (VEHICLE_COLORS[lastPart]) {
+      return VEHICLE_COLORS[lastPart];
+    }
   }
   
-  // Return base name - will try both extensions
-  return `/vehical/${baseName}`;
-}
-
-// Vehicle Image Component with error handling - tries both .png and .jpg
-function VehicleImage({ vehicleId, vehicleName, isSelected, size = 'md' }: { vehicleId: string; vehicleName: string; isSelected: boolean; size?: 'sm' | 'md' }) {
-  const [imageError, setImageError] = useState(false);
-  const [currentExtension, setCurrentExtension] = useState<'png' | 'jpg'>('png');
-  const sizeClass = size === 'sm' ? 'w-6 h-6' : 'w-8 h-8';
-  const iconSize = size === 'sm' ? 16 : 14;
-  const basePath = getVehicleImagePath(vehicleId);
-  
-  const handleImageError = () => {
-    if (currentExtension === 'png') {
-      // Try .jpg if .png fails
-      setCurrentExtension('jpg');
-    } else {
-      // Both failed - show icon
-      setImageError(true);
+  // Try middle part (like GR86-026-72, try "026" or "26")
+  if (parts.length >= 2) {
+    const middlePart = parts[parts.length - 2];
+    const numPart = middlePart.replace(/^0+/, '');
+    if (VEHICLE_COLORS[middlePart]) {
+      return VEHICLE_COLORS[middlePart];
     }
-  };
+    if (VEHICLE_COLORS[numPart]) {
+      return VEHICLE_COLORS[numPart];
+    }
+  }
+  
+  // Generate color based on vehicleId hash
+  let hash = 0;
+  for (let i = 0; i < vehicleId.length; i++) {
+    hash = vehicleId.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  
+  const vibrantColors = [
+    '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899',
+    '#f97316', '#14b8a6', '#a855f7', '#eab308', '#dc2626',
+    '#059669', '#d97706', '#f43f5e', '#7c3aed', '#06b6d4',
+    '#84cc16', '#6366f1', '#fbbf24',
+  ];
+  
+  const colorIndex = Math.abs(hash) % vibrantColors.length;
+  return vibrantColors[colorIndex];
+};
+
+// Vehicle SVG Icon Component - uses SVG car icon with vehicle color
+function VehicleImage({ vehicleId, vehicleName, isSelected, size = 'md' }: { vehicleId: string; vehicleName: string; isSelected: boolean; size?: 'sm' | 'md' }) {
+  const sizeClass = size === 'sm' ? 'w-6 h-6' : 'w-8 h-8';
+  const iconSize = size === 'sm' ? 16 : 20;
+  const vehicleColor = getVehicleColor(vehicleId);
+  const displayColor = isSelected ? '#3b82f6' : vehicleColor;
   
   return (
     <div className={`
       flex items-center justify-center ${sizeClass} rounded flex-shrink-0 overflow-hidden relative
       ${isSelected ? 'bg-blue-500/20 border border-blue-500/50' : 'bg-gray-700/50 border border-gray-600/50'}
     `}>
-      {!imageError ? (
-        <img
-          src={`${basePath}.${currentExtension}`}
-          alt={vehicleName}
-          className="w-full h-full object-cover"
-          onError={handleImageError}
-        />
-      ) : (
-        <Car 
-          size={iconSize} 
-          className={isSelected ? 'text-blue-400' : 'text-gray-400'}
-        />
-      )}
+      <Car 
+        size={iconSize} 
+        style={{ color: displayColor }}
+        className={isSelected ? 'text-blue-400' : ''}
+      />
     </div>
   );
 }
