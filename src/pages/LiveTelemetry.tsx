@@ -48,9 +48,9 @@ export function LiveTelemetry() {
   useEffect(() => {
     const loadVehicleInfo = async () => {
       try {
-        const data = await apiService.getVehicles();
+        const data = await apiService.getVehicles() as { vehicles?: Array<{ id: string; driver_number?: number; car_number?: number }> };
         const infoMap: Record<string, { driver_number?: number; car_number?: number }> = {};
-        data.vehicles?.forEach((v: any) => {
+        data.vehicles?.forEach((v) => {
           infoMap[v.id] = {
             driver_number: v.driver_number,
             car_number: v.car_number,

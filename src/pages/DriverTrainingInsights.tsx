@@ -430,8 +430,8 @@ export function DriverTrainingInsights() {
       const laps: LapInfo[] = [];
       
       // Add all available laps from driver insights lap_times
-      if (driverInsights?.lap_times && Array.isArray(driverInsights.lap_times)) {
-        driverInsights.lap_times.forEach((lap: any) => {
+      if (driverInsights && typeof driverInsights === 'object' && (driverInsights as any).lap_times && Array.isArray((driverInsights as any).lap_times)) {
+        (driverInsights as any).lap_times.forEach((lap: any) => {
           if (lap.lap !== undefined && lap.lap_time_seconds !== undefined && lap.lap_time_seconds !== null) {
             laps.push({
               lapNumber: lap.lap,
@@ -443,22 +443,24 @@ export function DriverTrainingInsights() {
       }
       
       // Fallback: Add best and worst laps from best/worst analysis if no lap_times
-      if (laps.length === 0 && bestWorstData) {
-        if (bestWorstData.best_lap?.lap_number && bestWorstData.best_lap?.lap_time_seconds) {
+      if (laps.length === 0 && bestWorstData && typeof bestWorstData === 'object') {
+        const bestLap = (bestWorstData as any).best_lap;
+        const worstLap = (bestWorstData as any).worst_lap;
+        if (bestLap?.lap_number && bestLap?.lap_time_seconds) {
           laps.push({
-            lapNumber: bestWorstData.best_lap.lap_number,
-            lapTime: bestWorstData.best_lap.lap_time_seconds,
-            formattedTime: formatLapTime(bestWorstData.best_lap.lap_time_seconds)
+            lapNumber: bestLap.lap_number,
+            lapTime: bestLap.lap_time_seconds,
+            formattedTime: formatLapTime(bestLap.lap_time_seconds)
           });
         }
         
-        if (bestWorstData.worst_lap?.lap_number && bestWorstData.worst_lap?.lap_time_seconds) {
-          const existingLap = laps.find(l => l.lapNumber === bestWorstData.worst_lap.lap_number);
+        if (worstLap?.lap_number && worstLap?.lap_time_seconds) {
+          const existingLap = laps.find(l => l.lapNumber === worstLap.lap_number);
           if (!existingLap) {
             laps.push({
-              lapNumber: bestWorstData.worst_lap.lap_number,
-              lapTime: bestWorstData.worst_lap.lap_time_seconds,
-              formattedTime: formatLapTime(bestWorstData.worst_lap.lap_time_seconds)
+              lapNumber: worstLap.lap_number,
+              lapTime: worstLap.lap_time_seconds,
+              formattedTime: formatLapTime(worstLap.lap_time_seconds)
             });
           }
         }
@@ -469,9 +471,9 @@ export function DriverTrainingInsights() {
       setAvailableLaps(sortedLaps);
       
       // Set default comparison: worst vs best
-      if (sortedLaps.length >= 2 && bestWorstData) {
-        const bestLapNum = bestWorstData.best_lap?.lap_number;
-        const worstLapNum = bestWorstData.worst_lap?.lap_number;
+      if (sortedLaps.length >= 2 && bestWorstData && typeof bestWorstData === 'object') {
+        const bestLapNum = (bestWorstData as any).best_lap?.lap_number;
+        const worstLapNum = (bestWorstData as any).worst_lap?.lap_number;
         
         const bestLap = bestLapNum ? sortedLaps.find(l => l.lapNumber === bestLapNum) : sortedLaps[0];
         const worstLap = worstLapNum ? sortedLaps.find(l => l.lapNumber === worstLapNum) : sortedLaps[sortedLaps.length - 1];
@@ -548,15 +550,17 @@ export function DriverTrainingInsights() {
           const prediction = await analysisService.getSectorPrediction(selectedVehicle, sector, 5).catch(() => null);
           
           // Extract sector times from best/worst data if available
-          let bestTime = aiAnalysis?.best_time || 0;
-          let worstTime = aiAnalysis?.worst_time || 0;
-          let averageTime = aiAnalysis?.average_time || 0;
+          let bestTime = (aiAnalysis as any)?.best_time || 0;
+          let worstTime = (aiAnalysis as any)?.worst_time || 0;
+          let averageTime = (aiAnalysis as any)?.average_time || 0;
           
-          if (bestWorstData) {
+          if (bestWorstData && typeof bestWorstData === 'object') {
             const sectorKey = sector === 'S1' ? 'best_sector1_time' : sector === 'S2' ? 'best_sector2_time' : 'best_sector3_time';
             const worstSectorKey = sector === 'S1' ? 'worst_sector1_time' : sector === 'S2' ? 'worst_sector2_time' : 'worst_sector3_time';
-            if (bestWorstData[sectorKey]) bestTime = bestWorstData[sectorKey];
-            if (bestWorstData[worstSectorKey]) worstTime = bestWorstData[worstSectorKey];
+            const bestSectorValue = (bestWorstData as any)[sectorKey];
+            const worstSectorValue = (bestWorstData as any)[worstSectorKey];
+            if (bestSectorValue) bestTime = bestSectorValue;
+            if (worstSectorValue) worstTime = worstSectorValue;
           }
           
           sectorData[sector] = {
@@ -564,11 +568,11 @@ export function DriverTrainingInsights() {
             averageTime: averageTime || 0,
             bestTime: bestTime || 0,
             worstTime: worstTime || 0,
-            consistency: aiAnalysis?.consistency_score || aiAnalysis?.consistency || 0,
-            improvement: prediction?.predicted_improvement || prediction?.improvement_potential || 0,
+            consistency: (aiAnalysis as any)?.consistency_score || (aiAnalysis as any)?.consistency || 0,
+            improvement: (prediction as any)?.predicted_improvement || (prediction as any)?.improvement_potential || 0,
             aiAnalysis: {
-              ...aiAnalysis,
-              recommendations: aiAnalysis?.recommendations || aiAnalysis?.insights?.[0]?.action || aiAnalysis?.summary,
+              ...(aiAnalysis as any || {}),
+              recommendations: (aiAnalysis as any)?.recommendations || (aiAnalysis as any)?.insights?.[0]?.action || (aiAnalysis as any)?.summary,
             },
           };
         } catch (error) {

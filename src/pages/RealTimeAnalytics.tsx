@@ -612,9 +612,9 @@ export function RealTimeAnalytics() {
                                 {entry.gap_first}
                               </div>
                             )}
-                            {entry.lap_time && (
+                            {entry.best_lap_time && (
                               <div className="text-gray-400 text-sm">
-                                Lap: {entry.lap_time}
+                                Best Lap: {entry.best_lap_time}
                               </div>
                             )}
                           </div>
