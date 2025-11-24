@@ -18,6 +18,9 @@ const defaultCenter = {
 // For development, you can use a free API key from Google Cloud Console
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
 
+// Static libraries array for Google Maps LoadScript to prevent unnecessary reloads
+const GOOGLE_MAPS_LIBRARIES: ('places' | 'drawing' | 'geometry' | 'visualization')[] = ['places'];
+
 // Vehicle colors for markers - distinct vibrant colors for each vehicle
 const VEHICLE_COLORS: Record<string, string> = {
   '13': '#ef4444', // Red
@@ -327,7 +330,7 @@ export function TrackMap({ vehicles, showStartFinish = true, showCheckpoints = f
   // Use useLoadScript hook for better error handling
   const { isLoaded, loadError: scriptLoadError } = useLoadScript({
     googleMapsApiKey: GOOGLE_MAPS_API_KEY || '',
-    libraries: ['places'],
+    libraries: GOOGLE_MAPS_LIBRARIES,
   });
 
   // Handle load errors
@@ -439,8 +442,13 @@ export function TrackMap({ vehicles, showStartFinish = true, showCheckpoints = f
         });
       }
       
-      // Fit bounds with padding
+      // Fit bounds with padding and maintain tilt
       mapInstance.fitBounds(googleBounds, 50);
+      
+      // Ensure tilt is maintained for 3D view
+      if (mapInstance.getTilt() !== 45) {
+        mapInstance.setTilt(45);
+      }
     }
   }, [mapInstance, isMapReady, vehicles, vehicleCount, trackPath]);
 
@@ -610,15 +618,57 @@ export function TrackMap({ vehicles, showStartFinish = true, showCheckpoints = f
   const startFinishPoint = trackPath[0];
   const finishPoint = trackPath[trackPath.length - 1];
 
-  // Get turn markers from track data
+  // Get turn markers from track data with offset positions (to the side of track)
   const turnMarkers = useMemo(() => {
     if (!trackData.turns || !Array.isArray(trackData.turns)) return [];
+    
+    // Helper function to calculate perpendicular offset position
+    const calculateOffsetPosition = (
+      point: { lat: number; lng: number },
+      pointIndex: number,
+      offsetDistance: number = 0.00015 // Offset in degrees (approximately 15-20 meters)
+    ): { lat: number; lng: number } => {
+      if (trackPath.length < 2) return point;
+      
+      // Get previous and next points to calculate direction
+      const prevIndex = pointIndex > 0 ? pointIndex - 1 : trackPath.length - 1;
+      const nextIndex = pointIndex < trackPath.length - 1 ? pointIndex + 1 : 0;
+      
+      const prevPoint = trackPath[prevIndex];
+      const nextPoint = trackPath[nextIndex];
+      
+      // Calculate direction vector (from previous to next)
+      const dx = nextPoint.lng - prevPoint.lng;
+      const dy = nextPoint.lat - prevPoint.lat;
+      
+      // Calculate perpendicular vector (rotate 90 degrees: swap and negate one)
+      // Perpendicular to (dx, dy) is (-dy, dx) or (dy, -dx)
+      // We'll use (dy, -dx) to offset to the right side
+      const perpDx = dy;
+      const perpDy = -dx;
+      
+      // Normalize the perpendicular vector
+      const length = Math.sqrt(perpDx * perpDx + perpDy * perpDy);
+      if (length === 0) return point;
+      
+      const normalizedDx = perpDx / length;
+      const normalizedDy = perpDy / length;
+      
+      // Apply offset
+      return {
+        lat: point.lat + normalizedDy * offsetDistance,
+        lng: point.lng + normalizedDx * offsetDistance,
+      };
+    };
+    
     return trackData.turns.map((turn: any) => {
       const pointIndex = turn.point;
       if (pointIndex >= 0 && pointIndex < trackPath.length) {
+        const originalPosition = trackPath[pointIndex];
+        const offsetPosition = calculateOffsetPosition(originalPosition, pointIndex);
         return {
           ...turn,
-          position: trackPath[pointIndex],
+          position: offsetPosition,
         };
       }
       return null;
@@ -641,6 +691,7 @@ export function TrackMap({ vehicles, showStartFinish = true, showCheckpoints = f
       mapTypeControl: true,
       mapTypeId: 'satellite' as google.maps.MapTypeId, // Show satellite view to see stadium
       fullscreenControl: true,
+      tilt: 45, // 3D tilt view (0-45 degrees)
       styles: [
         {
           featureType: 'poi',
@@ -746,15 +797,16 @@ export function TrackMap({ vehicles, showStartFinish = true, showCheckpoints = f
       <GoogleMap
         mapContainerStyle={containerStyle}
         center={center}
-        zoom={15}
         options={mapOptions}
         onLoad={(map) => {
           setIsMapReady(true);
           setMapInstance(map);
           console.log('Google Map loaded successfully');
-          // Fit bounds to track and vehicles
-          if (bounds && window.google?.maps) {
+          // Automatically fit bounds to track and vehicles with 3D tilt
+          if (window.google?.maps && trackPath.length > 0) {
             const googleBounds = new window.google.maps.LatLngBounds();
+            
+            // Add track path to bounds
             trackPath.forEach((point) => {
               googleBounds.extend(new window.google.maps.LatLng(point.lat, point.lng));
             });
@@ -768,7 +820,13 @@ export function TrackMap({ vehicles, showStartFinish = true, showCheckpoints = f
               });
             }
             
-            map.fitBounds(googleBounds);
+            // Fit bounds with padding and apply tilt
+            map.fitBounds(googleBounds, 50);
+            
+            // Set tilt for 3D view (if not already set in options)
+            if (map.getTilt() !== 45) {
+              map.setTilt(45);
+            }
           }
         }}
       >
@@ -809,24 +867,6 @@ export function TrackMap({ vehicles, showStartFinish = true, showCheckpoints = f
                 }}
                 zIndex={200}
               />
-        {/* Start/Finish Text Label */}
-          <Marker
-            position={{
-                lat: startFinishPoint.lat + 0.00015,
-              lng: startFinishPoint.lng,
-            }}
-            icon={{
-              url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
-                  <svg width="130" height="32" xmlns="http://www.w3.org/2000/svg">
-                    <rect width="130" height="32" fill="#FF6B00" stroke="#000000" stroke-width="2" rx="4"/>
-                    <text x="65" y="21" font-family="Arial, sans-serif" font-size="13" font-weight="bold" fill="#000000" text-anchor="middle">START/FINISH</text>
-                </svg>
-              `),
-                scaledSize: new window.google.maps.Size(130, 32),
-                anchor: new window.google.maps.Point(65, 16),
-            }}
-            zIndex={199}
-          />
           </>
         )}
 
@@ -844,13 +884,11 @@ export function TrackMap({ vehicles, showStartFinish = true, showCheckpoints = f
             const isSubTurn = turn.id.includes('a') || turn.id.includes('b');
             const labelWidth = isSubTurn ? 42 : 38;
             const labelHeight = isSubTurn ? 24 : 28;
-            const fontSize = isSubTurn ? 12 : 14;
             
-            // Create orange box with black text (matching the image style)
+            // Create orange box icon only (no text)
             const turnIconUrl = 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
               <svg width="${labelWidth}" height="${labelHeight}" xmlns="http://www.w3.org/2000/svg">
                 <rect width="${labelWidth}" height="${labelHeight}" fill="#FF6B00" stroke="#000000" stroke-width="2.5" rx="4"/>
-                <text x="${labelWidth/2}" y="${labelHeight/2 + 5}" font-family="Arial, sans-serif" font-size="${fontSize}" font-weight="bold" fill="#000000" text-anchor="middle">${turn.id}</text>
               </svg>
             `);
             

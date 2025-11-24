@@ -61,9 +61,10 @@ class ApiService {
           const isDevelopment = import.meta.env.DEV;
           // Show the actual URL being requested
           const actualUrl = this.baseUrl ? `${this.baseUrl}${endpoint}` : endpoint;
-          const backendInfo = isDevelopment 
-            ? `Proxied to: https://hack-the-track-backend-821372121985.europe-west1.run.app${endpoint}`
-            : `Backend: ${this.baseUrl || 'unknown'}`;
+          const envBackendUrl = import.meta.env.VITE_API_BASE_URL;
+          const backendInfo = isDevelopment && !this.baseUrl
+            ? `Proxied to: ${envBackendUrl || 'localhost'}${endpoint}`
+            : `Backend: ${this.baseUrl || envBackendUrl || 'unknown'}`;
           
           const errorMsg = `Service Unavailable (503): The backend endpoint ${endpoint} is currently unavailable.\n\n` +
             `Possible reasons:\n` +
@@ -71,7 +72,7 @@ class ApiService {
             `- The service needs to be initialized (e.g., no race data yet)\n` +
             `- The backend service for this endpoint is down\n\n` +
             `${backendInfo}\n` +
-            `Mode: ${isDevelopment ? 'Development (using proxy)' : 'Production'}\n` +
+            `Mode: ${isDevelopment ? (this.baseUrl ? 'Development (direct)' : 'Development (using proxy)') : 'Production'}\n` +
             `Request URL: ${actualUrl}`;
           throw new Error(errorMsg);
         }
