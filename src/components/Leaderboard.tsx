@@ -1,10 +1,46 @@
+import { useEffect, useMemo } from 'react';
 import { useTelemetryStore } from '../store/telemetryStore';
 import { useModal } from '../contexts/ModalContext';
-import { Trophy, Clock, ChevronDown, ChevronUp } from 'lucide-react';
+import { useLeaderboardServiceWS } from '../services/leaderboardServiceWS';
+import { Trophy, Clock, ChevronDown, ChevronUp, Radio } from 'lucide-react';
 
 export function Leaderboard() {
-  const { leaderboard } = useTelemetryStore();
+  const { leaderboard, isPlaying, updateLeaderboardFromVehicles } = useTelemetryStore();
   const { showLeaderboard, setShowLeaderboard } = useModal();
+  
+  // Connect to real-time leaderboard updates
+  const { isConnected } = useLeaderboardServiceWS();
+  
+  // Get vehicles from store for the effect
+  const vehicles = useTelemetryStore((state) => state.vehicles);
+  
+  // Auto-update leaderboard from vehicle positions during live race
+  useEffect(() => {
+    if (isPlaying && Object.keys(vehicles).length > 0) {
+      // Update leaderboard positions based on vehicle track progress
+      const intervalId = setInterval(() => {
+        updateLeaderboardFromVehicles();
+      }, 500); // Update every 500ms for smooth real-time updates
+      
+      return () => clearInterval(intervalId);
+    }
+  }, [isPlaying, vehicles, updateLeaderboardFromVehicles]);
+  
+  // Sort leaderboard by position to ensure correct order
+  const sortedLeaderboard = useMemo(() => {
+    return [...leaderboard].sort((a, b) => {
+      // First sort by position
+      if (a.position !== b.position) {
+        return a.position - b.position;
+      }
+      // Then by laps if positions are equal
+      if (a.laps !== b.laps) {
+        return (b.laps || 0) - (a.laps || 0);
+      }
+      // Finally by vehicle_id for consistency
+      return a.vehicle_id.localeCompare(b.vehicle_id);
+    });
+  }, [leaderboard]);
 
   const getPositionColor = (position: number) => {
     if (position === 1) return 'bg-yellow-600';
@@ -18,10 +54,24 @@ export function Leaderboard() {
       {/* Header */}
       <div className="p-4 border-b border-gray-700 bg-transparent">
         <div className="flex items-center justify-between">
-          <h3 className="text-lg font-bold flex items-center gap-2 text-white">
-            <Trophy size={20} className="text-yellow-500" />
-            Leaderboard
-          </h3>
+          <div className="flex items-center gap-2">
+            <h3 className="text-lg font-bold flex items-center gap-2 text-white">
+              <Trophy size={20} className="text-yellow-500" />
+              Leaderboard
+            </h3>
+            {isPlaying && (
+              <div className="flex items-center gap-1.5 px-2 py-1 bg-green-600/20 rounded-full">
+                <Radio size={12} className="text-green-400 animate-pulse" />
+                <span className="text-xs text-green-400 font-semibold">LIVE</span>
+              </div>
+            )}
+            {!isConnected && !isPlaying && (
+              <div className="flex items-center gap-1.5 px-2 py-1 bg-gray-600/20 rounded-full">
+                <Radio size={12} className="text-gray-400" />
+                <span className="text-xs text-gray-400 font-semibold">OFFLINE</span>
+              </div>
+            )}
+          </div>
           <button 
             onClick={() => setShowLeaderboard(false)}
             className="p-1 hover:bg-gray-700 rounded transition-colors"
@@ -34,11 +84,13 @@ export function Leaderboard() {
 
       {/* Content */}
       <div className="p-4 max-h-[calc(100vh-180px)] overflow-y-auto">
-        {leaderboard.length === 0 ? (
-          <div className="text-sm text-gray-400 text-center py-8">No leaderboard data yet</div>
+        {sortedLeaderboard.length === 0 ? (
+          <div className="text-sm text-gray-400 text-center py-8">
+            {isPlaying ? 'Waiting for race data...' : 'No leaderboard data yet'}
+          </div>
         ) : (
           <div className="space-y-2">
-            {leaderboard.map((entry) => (
+            {sortedLeaderboard.map((entry) => (
               <div
                 key={entry.vehicle_id}
                 className={`p-3 rounded-lg transition-all duration-200 hover:scale-[1.02] ${

@@ -422,25 +422,62 @@ export function RealTimeAnalytics() {
                       <span className="text-gray-400">Next Lap:</span>
                       <span className="text-white font-bold">
                         {performancePrediction.next_lap_prediction 
-                          ? `${Math.floor(performancePrediction.next_lap_prediction / 60)}:${(performancePrediction.next_lap_prediction % 60).toFixed(3).padStart(6, '0')}`
+                          ? (typeof performancePrediction.next_lap_prediction === 'number'
+                              ? `${Math.floor(performancePrediction.next_lap_prediction / 60)}:${(performancePrediction.next_lap_prediction % 60).toFixed(3).padStart(6, '0')}`
+                              : String(performancePrediction.next_lap_prediction))
                           : 'N/A'}
                       </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-400">Trend:</span>
                       <span className={`font-semibold ${
-                        performancePrediction.trend === 'improving' ? 'text-green-400' :
-                        performancePrediction.trend === 'declining' ? 'text-red-400' :
+                        (typeof performancePrediction.trend === 'string' && performancePrediction.trend === 'improving') ? 'text-green-400' :
+                        (typeof performancePrediction.trend === 'string' && performancePrediction.trend === 'declining') ? 'text-red-400' :
+                        (typeof performancePrediction.trend === 'object' && performancePrediction.trend?.direction === 'improving') ? 'text-green-400' :
+                        (typeof performancePrediction.trend === 'object' && performancePrediction.trend?.direction === 'declining') ? 'text-red-400' :
                         'text-gray-400'
                       }`}>
-                        {performancePrediction.trend || 'Stable'}
+                        {typeof performancePrediction.trend === 'string' 
+                          ? performancePrediction.trend 
+                          : typeof performancePrediction.trend === 'object' && performancePrediction.trend !== null
+                          ? (() => {
+                              // Handle expected_improvement if it exists
+                              if (performancePrediction.trend.expected_improvement !== undefined) {
+                                const expImp = performancePrediction.trend.expected_improvement;
+                                if (typeof expImp === 'string' || typeof expImp === 'number') {
+                                  return String(expImp);
+                                }
+                                if (typeof expImp === 'object' && expImp !== null) {
+                                  return expImp.expected_improvement || 
+                                         (expImp.rate_per_lap 
+                                           ? `${expImp.direction || 'Improvement'}: ${expImp.rate_per_lap}`
+                                           : null) ||
+                                         JSON.stringify(expImp);
+                                }
+                                return String(expImp);
+                              }
+                              // Handle rate_per_lap
+                              if (performancePrediction.trend.rate_per_lap !== undefined) {
+                                const rate = performancePrediction.trend.rate_per_lap;
+                                const direction = performancePrediction.trend.direction || 'Improvement';
+                                return `${direction}: ${typeof rate === 'string' || typeof rate === 'number' ? rate : JSON.stringify(rate)}`;
+                              }
+                              // Fallback to message, description, or stringify
+                              return performancePrediction.trend.message || 
+                                     performancePrediction.trend.description || 
+                                     JSON.stringify(performancePrediction.trend) || 
+                                     'Stable';
+                            })()
+                          : 'Stable'}
                       </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-400">Confidence:</span>
                       <span className="text-white font-bold">
                         {performancePrediction.confidence 
-                          ? `${Math.round(performancePrediction.confidence * 100)}%`
+                          ? (typeof performancePrediction.confidence === 'number'
+                              ? `${Math.round(performancePrediction.confidence * 100)}%`
+                              : String(performancePrediction.confidence))
                           : 'N/A'}
                       </span>
                     </div>
@@ -457,17 +494,29 @@ export function RealTimeAnalytics() {
                   <div className="space-y-2 text-sm">
                     <div className="flex justify-between">
                       <span className="text-gray-400">Total Insights:</span>
-                      <span className="text-white font-bold">{aiInsights.summary.total_insights || 0}</span>
+                      <span className="text-white font-bold">
+                        {typeof aiInsights.summary.total_insights === 'number' 
+                          ? aiInsights.summary.total_insights 
+                          : typeof aiInsights.summary.total_insights === 'string'
+                          ? aiInsights.summary.total_insights
+                          : 0}
+                      </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-400">High Priority:</span>
-                      <span className="text-red-400 font-bold">{aiInsights.summary.priority_insights?.length || 0}</span>
+                      <span className="text-red-400 font-bold">
+                        {Array.isArray(aiInsights.summary.priority_insights) 
+                          ? aiInsights.summary.priority_insights.length 
+                          : 0}
+                      </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-400">Consistency:</span>
                       <span className="text-white font-bold">
                         {aiInsights.summary.consistency_score !== null && aiInsights.summary.consistency_score !== undefined
-                          ? `${Math.round(100 - (aiInsights.summary.consistency_score * 10))}%`
+                          ? (typeof aiInsights.summary.consistency_score === 'number'
+                              ? `${Math.round(100 - (aiInsights.summary.consistency_score * 10))}%`
+                              : String(aiInsights.summary.consistency_score))
                           : 'N/A'}
                       </span>
                     </div>
@@ -497,10 +546,33 @@ export function RealTimeAnalytics() {
                         <div className="flex items-start gap-2">
                           <IconComponent className={`h-4 w-4 ${iconColor} mt-0.5 flex-shrink-0`} />
                           <div className="flex-1">
-                            <h5 className="text-white font-semibold text-xs">{insight.title}</h5>
-                            <p className="text-gray-400 text-xs mt-1">{insight.description}</p>
+                            <h5 className="text-white font-semibold text-xs">
+                              {typeof insight.title === 'string' 
+                                ? insight.title 
+                                : insight.title?.message || insight.title?.description || JSON.stringify(insight.title)}
+                            </h5>
+                            <p className="text-gray-400 text-xs mt-1">
+                              {typeof insight.description === 'string' 
+                                ? insight.description 
+                                : insight.description?.message || insight.description?.description || JSON.stringify(insight.description)}
+                            </p>
                             {insight.action && (
-                              <p className="text-blue-400 text-xs mt-1">{insight.action}</p>
+                              <p className="text-blue-400 text-xs mt-1">
+                                {typeof insight.action === 'string' 
+                                  ? insight.action 
+                                  : insight.action?.message || insight.action?.description || JSON.stringify(insight.action)}
+                              </p>
+                            )}
+                            {insight.expected_improvement && (
+                              <p className="text-green-400 text-xs mt-1 font-semibold">
+                                Expected: {typeof insight.expected_improvement === 'object' 
+                                  ? (insight.expected_improvement.expected_improvement || 
+                                     (insight.expected_improvement.rate_per_lap 
+                                       ? `${insight.expected_improvement.direction || 'Improvement'}: ${insight.expected_improvement.rate_per_lap}`
+                                       : null) ||
+                                     JSON.stringify(insight.expected_improvement))
+                                  : String(insight.expected_improvement)}
+                              </p>
                             )}
                           </div>
                         </div>
@@ -600,21 +672,37 @@ export function RealTimeAnalytics() {
                       <div key={entry.vehicle_id || idx} className="bg-gray-900/50 rounded-lg p-4">
                         <div className="flex items-center justify-between">
                           <div>
-                            <span className="text-blue-400 font-semibold">Vehicle {entry.vehicle_id}</span>
-                            <span className="text-gray-400 ml-4">Position: {entry.position}</span>
+                            <span className="text-blue-400 font-semibold">
+                              Vehicle {typeof entry.vehicle_id === 'string' || typeof entry.vehicle_id === 'number'
+                                ? entry.vehicle_id
+                                : entry.vehicle_id?.message || entry.vehicle_id?.description || JSON.stringify(entry.vehicle_id) || 'N/A'}
+                            </span>
+                            <span className="text-gray-400 ml-4">
+                              Position: {typeof entry.position === 'string' || typeof entry.position === 'number'
+                                ? entry.position
+                                : entry.position?.message || entry.position?.description || JSON.stringify(entry.position) || 'N/A'}
+                            </span>
                             {entry.laps !== undefined && (
-                              <span className="text-gray-400 ml-4">Lap: {entry.laps}</span>
+                              <span className="text-gray-400 ml-4">
+                                Lap: {typeof entry.laps === 'string' || typeof entry.laps === 'number'
+                                  ? entry.laps
+                                  : entry.laps?.message || entry.laps?.description || JSON.stringify(entry.laps) || 'N/A'}
+                              </span>
                             )}
                           </div>
                           <div className="text-right">
                             {entry.gap_first && (
                               <div className="text-white font-bold">
-                                {entry.gap_first}
+                                {typeof entry.gap_first === 'string' || typeof entry.gap_first === 'number'
+                                  ? entry.gap_first
+                                  : entry.gap_first?.message || entry.gap_first?.description || JSON.stringify(entry.gap_first)}
                               </div>
                             )}
                             {entry.best_lap_time && (
                               <div className="text-gray-400 text-sm">
-                                Best Lap: {entry.best_lap_time}
+                                Best Lap: {typeof entry.best_lap_time === 'string' || typeof entry.best_lap_time === 'number'
+                                  ? entry.best_lap_time
+                                  : entry.best_lap_time?.message || entry.best_lap_time?.description || JSON.stringify(entry.best_lap_time)}
                               </div>
                             )}
                           </div>
@@ -628,11 +716,23 @@ export function RealTimeAnalytics() {
                       <div key={idx} className="bg-gray-900/50 rounded-lg p-4">
                         <div className="flex items-center justify-between">
                           <div>
-                            <span className="text-blue-400 font-semibold">Vehicle {gap.vehicle_id}</span>
-                            <span className="text-gray-400 ml-4">Position: {gap.position}</span>
+                            <span className="text-blue-400 font-semibold">
+                              Vehicle {typeof gap.vehicle_id === 'string' || typeof gap.vehicle_id === 'number'
+                                ? gap.vehicle_id
+                                : gap.vehicle_id?.message || gap.vehicle_id?.description || JSON.stringify(gap.vehicle_id) || 'N/A'}
+                            </span>
+                            <span className="text-gray-400 ml-4">
+                              Position: {typeof gap.position === 'string' || typeof gap.position === 'number'
+                                ? gap.position
+                                : gap.position?.message || gap.position?.description || JSON.stringify(gap.position) || 'N/A'}
+                            </span>
                           </div>
                           <div className="text-white font-bold">
-                            {gap.gap_to_leader || 'N/A'}
+                            {gap.gap_to_leader 
+                              ? (typeof gap.gap_to_leader === 'string' || typeof gap.gap_to_leader === 'number'
+                                  ? gap.gap_to_leader
+                                  : gap.gap_to_leader?.message || gap.gap_to_leader?.description || JSON.stringify(gap.gap_to_leader))
+                              : 'N/A'}
                           </div>
                         </div>
                       </div>

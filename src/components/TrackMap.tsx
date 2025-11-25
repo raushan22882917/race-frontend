@@ -138,14 +138,17 @@ interface FinishCelebration {
   vehicleId: string;
   position: { lat: number; lng: number };
   timestamp: number;
+  speed?: number;
+  heading?: number;
 }
 
 export function TrackMap({ vehicles, showStartFinish = true, showCheckpoints = false }: TrackMapProps) {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isMapReady, setIsMapReady] = useState(false);
   const [mapInstance, setMapInstance] = useState<google.maps.Map | null>(null);
-  const { vehiclePaths, isPlaying } = useTelemetryStore();
-  const [finishCelebrations, setFinishCelebrations] = useState<FinishCelebration[]>([]);
+  const { vehiclePaths, isPlaying, vehicles: telemetryVehicles } = useTelemetryStore();
+  const [firstFinisher, setFirstFinisher] = useState<FinishCelebration | null>(null);
+  const [showWinnerDialog, setShowWinnerDialog] = useState(false);
   const previousProgress = useRef<Record<string, number>>({});
 
   // Create hardcoded vehicle icon - stylized racing car pointing in direction of travel
@@ -631,7 +634,8 @@ export function TrackMap({ vehicles, showStartFinish = true, showCheckpoints = f
   // Clear celebrations and progress when paused
   useEffect(() => {
     if (!isPlaying) {
-      setFinishCelebrations([]);
+      setFirstFinisher(null);
+      setShowWinnerDialog(false);
       previousProgress.current = {};
     }
   }, [isPlaying]);
@@ -653,23 +657,27 @@ export function TrackMap({ vehicles, showStartFinish = true, showCheckpoints = f
         // Detect finish line crossing: progress goes from > 0.9 back to < 0.1
         // This means vehicle completed a lap
         if (previousProg > 0.9 && currentProgress < 0.1 && previousProg !== 0) {
-          // Vehicle crossed finish line!
-          setFinishCelebrations((prev) => [
-            ...prev,
-            {
-              vehicleId,
-              position: {
-                lat: vehicle.position.lat,
-                lng: vehicle.position.lng,
-              },
-              timestamp: Date.now(),
-            },
-          ]);
-
-          // Remove celebration after 5 seconds
-          setTimeout(() => {
-            setFinishCelebrations((prev) => prev.filter((c) => c.vehicleId !== vehicleId || c.timestamp !== Date.now()));
-          }, 5000);
+          // Only track the first finisher
+          setFirstFinisher((prev) => {
+            // If no finisher yet, this is the first one
+            if (!prev) {
+              const finisherData: FinishCelebration = {
+                vehicleId,
+                position: {
+                  lat: vehicle.position.lat,
+                  lng: vehicle.position.lng,
+                },
+                timestamp: Date.now(),
+                speed: vehicle.speed,
+                heading: vehicle.heading,
+              };
+              // Show winner dialog
+              setShowWinnerDialog(true);
+              return finisherData;
+            }
+            // Already have a finisher, don't update
+            return prev;
+          });
         }
 
         previousProgress.current[vehicleId] = currentProgress;
@@ -797,7 +805,99 @@ export function TrackMap({ vehicles, showStartFinish = true, showCheckpoints = f
     );
   }
 
+  // Get winner details from telemetry store
+  const winnerVehicle = firstFinisher ? telemetryVehicles[firstFinisher.vehicleId] : null;
+  const winnerDisplayVehicle = firstFinisher ? vehicles?.[firstFinisher.vehicleId] : null;
+
   return (
+    <>
+      {/* Winner Dialog Card */}
+      {showWinnerDialog && firstFinisher && (
+        <div className="fixed inset-0 z-[3000] flex items-center justify-center bg-black bg-opacity-50">
+          <div className="bg-gradient-to-br from-yellow-900 via-yellow-800 to-orange-900 rounded-xl shadow-2xl border-4 border-yellow-500 p-8 max-w-md w-full mx-4 relative">
+            {/* Close button */}
+            <button
+              onClick={() => setShowWinnerDialog(false)}
+              className="absolute top-4 right-4 text-white hover:text-yellow-300 transition-colors"
+              aria-label="Close"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+
+            {/* Winner Header */}
+            <div className="text-center mb-6">
+              <div className="text-6xl mb-4">🏆</div>
+              <h2 className="text-3xl font-bold text-white mb-2">FIRST FINISHER!</h2>
+              <div className="text-yellow-300 text-xl font-semibold">Vehicle #{firstFinisher.vehicleId}</div>
+            </div>
+
+            {/* Winner Details */}
+            <div className="space-y-4 bg-black bg-opacity-30 rounded-lg p-6">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <div className="text-gray-300 text-sm mb-1">Vehicle ID</div>
+                  <div className="text-white font-bold text-lg">{firstFinisher.vehicleId}</div>
+                </div>
+                <div>
+                  <div className="text-gray-300 text-sm mb-1">Finish Speed</div>
+                  <div className="text-white font-bold text-lg">
+                    {winnerDisplayVehicle?.speed 
+                      ? `${winnerDisplayVehicle.speed.toFixed(1)} km/h`
+                      : firstFinisher.speed 
+                      ? `${firstFinisher.speed.toFixed(1)} km/h`
+                      : 'N/A'}
+                  </div>
+                </div>
+              </div>
+
+              {winnerVehicle?.telemetry && (
+                <>
+                  {winnerVehicle.telemetry.lap !== undefined && (
+                    <div>
+                      <div className="text-gray-300 text-sm mb-1">Total Laps</div>
+                      <div className="text-white font-bold text-lg">{winnerVehicle.telemetry.lap}</div>
+                    </div>
+                  )}
+                  {winnerVehicle.telemetry.rpm !== undefined && (
+                    <div>
+                      <div className="text-gray-300 text-sm mb-1">RPM</div>
+                      <div className="text-white font-bold text-lg">{Math.round(winnerVehicle.telemetry.rpm)}</div>
+                    </div>
+                  )}
+                  {winnerVehicle.telemetry.gear !== undefined && (
+                    <div>
+                      <div className="text-gray-300 text-sm mb-1">Gear</div>
+                      <div className="text-white font-bold text-lg">{winnerVehicle.telemetry.gear}</div>
+                    </div>
+                  )}
+                </>
+              )}
+
+              <div className="pt-4 border-t border-yellow-500 border-opacity-30">
+                <div className="text-gray-300 text-sm mb-1">Finish Position</div>
+                <div className="text-yellow-300 font-bold text-2xl">1st Place</div>
+              </div>
+
+              {firstFinisher.timestamp && (
+                <div className="text-gray-400 text-xs mt-4">
+                  Finished at: {new Date(firstFinisher.timestamp).toLocaleTimeString()}
+                </div>
+              )}
+            </div>
+
+            {/* Action Button */}
+            <button
+              onClick={() => setShowWinnerDialog(false)}
+              className="mt-6 w-full bg-yellow-500 hover:bg-yellow-600 text-black font-bold py-3 px-6 rounded-lg transition-colors"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+
       <GoogleMap
         mapContainerStyle={containerStyle}
         center={center}
@@ -1011,23 +1111,23 @@ export function TrackMap({ vehicles, showStartFinish = true, showCheckpoints = f
           </>
         )}
 
-        {/* Finish Line Celebrations */}
-        {finishCelebrations.map((celebration) => {
-          const vehicle = vehicles?.[celebration.vehicleId];
+        {/* Finish Line Celebration - Only First Finisher */}
+        {firstFinisher && (() => {
+          const vehicle = vehicles?.[firstFinisher.vehicleId];
           if (!vehicle) return null;
 
           const googleMaps = window.google?.maps;
           if (!googleMaps) return null;
 
-          // Create celebration icon
+          // Create celebration icon with only "FINISH" text
           const celebrationIconUrl = 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
-            <svg width="120" height="120" xmlns="http://www.w3.org/2000/svg">
+            <svg width="120" height="80" xmlns="http://www.w3.org/2000/svg">
               <defs>
-                <radialGradient id="grad">
+                <radialGradient id="grad-finish">
                   <stop offset="0%" stop-color="#FFD700" />
                   <stop offset="100%" stop-color="#FF6B00" />
                 </radialGradient>
-                <filter id="glow">
+                <filter id="glow-finish">
                   <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
                   <feMerge>
                     <feMergeNode in="coloredBlur"/>
@@ -1035,29 +1135,29 @@ export function TrackMap({ vehicles, showStartFinish = true, showCheckpoints = f
                   </feMerge>
                 </filter>
               </defs>
-              <circle cx="60" cy="60" r="55" fill="url(#grad)" stroke="#FFD700" stroke-width="4" filter="url(#glow)"/>
-              <text x="60" y="50" font-size="40" text-anchor="middle" fill="white">🏁</text>
-              <text x="60" y="85" font-size="16" font-weight="bold" text-anchor="middle" fill="white">FINISH!</text>
+              <rect x="0" y="0" width="120" height="80" rx="10" fill="url(#grad-finish)" stroke="#FFD700" stroke-width="3" filter="url(#glow-finish)"/>
+              <text x="60" y="50" font-size="24" font-weight="bold" text-anchor="middle" fill="white" filter="url(#glow-finish)">FINISH</text>
             </svg>
           `);
 
           return (
             <Marker
-              key={`celebration-${celebration.vehicleId}-${celebration.timestamp}`}
-              position={celebration.position}
+              key={`celebration-${firstFinisher.vehicleId}`}
+              position={firstFinisher.position}
               icon={{
                 url: celebrationIconUrl,
-                scaledSize: new googleMaps.Size(120, 120),
-                anchor: new googleMaps.Point(60, 60),
+                scaledSize: new googleMaps.Size(120, 80),
+                anchor: new googleMaps.Point(60, 40),
               }}
               zIndex={2000}
-              title={`Vehicle #${celebration.vehicleId} - Reached Finish Line!`}
+              title={`Vehicle #${firstFinisher.vehicleId} - First Finisher!`}
             />
           );
-        })}
+        })()}
         
        
       </GoogleMap>
+    </>
   );
 }
 
