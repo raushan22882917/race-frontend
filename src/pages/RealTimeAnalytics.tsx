@@ -675,18 +675,18 @@ export function RealTimeAnalytics() {
                             <span className="text-blue-400 font-semibold">
                               Vehicle {typeof entry.vehicle_id === 'string' || typeof entry.vehicle_id === 'number'
                                 ? entry.vehicle_id
-                                : entry.vehicle_id?.message || entry.vehicle_id?.description || JSON.stringify(entry.vehicle_id) || 'N/A'}
+                                : (entry.vehicle_id as any)?.message || (entry.vehicle_id as any)?.description || JSON.stringify(entry.vehicle_id) || 'N/A'}
                             </span>
                             <span className="text-gray-400 ml-4">
                               Position: {typeof entry.position === 'string' || typeof entry.position === 'number'
                                 ? entry.position
-                                : entry.position?.message || entry.position?.description || JSON.stringify(entry.position) || 'N/A'}
+                                : (entry.position as any)?.message || (entry.position as any)?.description || JSON.stringify(entry.position) || 'N/A'}
                             </span>
                             {entry.laps !== undefined && (
                               <span className="text-gray-400 ml-4">
                                 Lap: {typeof entry.laps === 'string' || typeof entry.laps === 'number'
                                   ? entry.laps
-                                  : entry.laps?.message || entry.laps?.description || JSON.stringify(entry.laps) || 'N/A'}
+                                  : (entry.laps as any)?.message || (entry.laps as any)?.description || JSON.stringify(entry.laps) || 'N/A'}
                               </span>
                             )}
                           </div>
@@ -695,14 +695,14 @@ export function RealTimeAnalytics() {
                               <div className="text-white font-bold">
                                 {typeof entry.gap_first === 'string' || typeof entry.gap_first === 'number'
                                   ? entry.gap_first
-                                  : entry.gap_first?.message || entry.gap_first?.description || JSON.stringify(entry.gap_first)}
+                                  : (entry.gap_first as any)?.message || (entry.gap_first as any)?.description || JSON.stringify(entry.gap_first)}
                               </div>
                             )}
                             {entry.best_lap_time && (
                               <div className="text-gray-400 text-sm">
                                 Best Lap: {typeof entry.best_lap_time === 'string' || typeof entry.best_lap_time === 'number'
                                   ? entry.best_lap_time
-                                  : entry.best_lap_time?.message || entry.best_lap_time?.description || JSON.stringify(entry.best_lap_time)}
+                                  : (entry.best_lap_time as any)?.message || (entry.best_lap_time as any)?.description || JSON.stringify(entry.best_lap_time)}
                               </div>
                             )}
                           </div>
