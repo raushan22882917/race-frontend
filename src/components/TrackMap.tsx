@@ -1142,36 +1142,37 @@ export function TrackMap({ vehicles, showStartFinish = true, showCheckpoints = f
         {vehiclesToShow.length > 0 && (
           <>
             {vehiclesToShow.map(({ vehicleId, vehicle: vehicleData, hasData }) => {
-                // Determine position: use start point if race hasn't started, otherwise use vehicle position
+                // Determine position: use start point if race hasn't started, otherwise use vehicle GPS position
                 let vehiclePosition: { lat: number; lng: number };
                 let heading = 0;
                 let speed = 0;
                 
-                if (!isPlaying || !hasData || !vehicleData?.position) {
-                  // Race not started or vehicle has no data - use start point
+                // Get GPS coordinates from telemetry data
+                const gpsLat = vehicleData?.telemetry?.gps_lat;
+                const gpsLon = vehicleData?.telemetry?.gps_lon;
+                const hasGpsData = gpsLat != null && gpsLon != null && !isNaN(gpsLat) && !isNaN(gpsLon);
+                
+                if (!isPlaying || !hasData || !hasGpsData) {
+                  // Race not started or vehicle has no GPS data - use start point
                   vehiclePosition = trackPath.length > 0 ? trackPath[0] : { lat: 0, lng: 0 };
                   heading = 0; // Default heading
                   speed = 0;
                 } else {
-                  // Race is playing and vehicle has data - use actual position
-                  if (!vehicleData.position || 
-                      vehicleData.position.lat == null || 
-                      vehicleData.position.lng == null ||
-                      isNaN(vehicleData.position.lat) ||
-                      isNaN(vehicleData.position.lng)) {
-                    return null;
-                  }
-                  
+                  // Race is playing and vehicle has GPS data - use actual GPS position
                   // Project vehicle position onto the nearest point on the track
-                  vehiclePosition = projectToTrack(vehicleData.position.lat, vehicleData.position.lng);
+                  vehiclePosition = projectToTrack(gpsLat, gpsLon);
                   
-                  // Calculate heading in degrees
-                  if (vehicleData.heading !== undefined && vehicleData.heading != null) {
-                    heading = (vehicleData.heading * 180) / Math.PI;
+                  // Calculate heading from rotation (rotation.y is in radians)
+                  if (vehicleData.rotation?.y !== undefined && vehicleData.rotation.y != null) {
+                    // Convert rotation from radians to degrees, then adjust for map heading (0° = North)
+                    heading = (vehicleData.rotation.y * 180) / Math.PI;
                     if (heading < 0) heading += 360;
+                    // Convert from Unity rotation (0° = forward/Z+) to map heading (0° = North)
+                    heading = (heading + 90) % 360;
                   }
                   
-                  speed = vehicleData.speed || 0;
+                  // Get speed from telemetry
+                  speed = vehicleData.telemetry?.speed || 0;
                 }
 
                 const vehicleColor = getVehicleColor(vehicleId);
