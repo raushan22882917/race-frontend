@@ -1,18 +1,43 @@
-import { Play, Pause, Power, Gauge } from 'lucide-react';
+import { Play, Pause, Gauge } from 'lucide-react';
 import { useTelemetryStore } from '../store/telemetryStore';
 import { useTelemetryServiceWS as useTelemetryService } from '../services/telemetryServiceWS';
-import { useState, useEffect } from 'react';
+import { useModal } from '../contexts/ModalContext';
+import { useState, useEffect, useRef } from 'react';
 import { apiService } from '../services/apiService';
 
 export function PlaybackControls() {
-  const { isPaused, resetVehiclesToStart, vehicles, selectedVehicleId, leaderboard, weather, weatherEnabled } = useTelemetryStore();
+  const { 
+    isPaused, 
+    isPlaying,
+    resetVehiclesToStart, 
+    vehicles, 
+    selectedVehicleId, 
+    leaderboard, 
+    weather, 
+    weatherEnabled,
+    raceFinished,
+    winnerVehicleId,
+    setRaceFinished,
+    resetRace,
+    setPaused
+  } = useTelemetryStore();
   const { play, pause, restart } = useTelemetryService();
+  const { setShowLeaderboard } = useModal();
   const [vehicleInfo, setVehicleInfo] = useState<Record<string, { driver_number?: number; car_number?: number }>>({});
+  const [isDataLoaded, setIsDataLoaded] = useState(false);
+  const [isStarting, setIsStarting] = useState(false);
+  const hasResetVehiclesRef = useRef(false);
 
-  // Reset vehicles to start position on mount and when paused
+  // Auto-stop race when winner is detected (from TrackMap)
   useEffect(() => {
-    resetVehiclesToStart();
-  }, [resetVehiclesToStart]);
+    if (raceFinished && isPlaying && winnerVehicleId) {
+      // Auto-pause when race is finished
+      pause().catch(console.error);
+      setPaused(true);
+      // Show leaderboard when winner is decided
+      setShowLeaderboard(true);
+    }
+  }, [raceFinished, winnerVehicleId, isPlaying, pause, setPaused, setShowLeaderboard]);
 
   // Load vehicle info with driver numbers
   useEffect(() => {
@@ -36,6 +61,37 @@ export function PlaybackControls() {
     const interval = setInterval(loadVehicleInfo, 30000);
     return () => clearInterval(interval);
   }, []);
+
+  // Check if data is loaded (vehicles or leaderboard) - use length to avoid object reference issues
+  const vehicleCount = Object.keys(vehicles).length;
+  const leaderboardCount = leaderboard.length;
+  
+  useEffect(() => {
+    // Only check once when data becomes available
+    if (isDataLoaded) return;
+    
+    const hasVehicles = vehicleCount > 0;
+    const hasLeaderboard = leaderboardCount > 0;
+    
+    if (hasVehicles || hasLeaderboard) {
+      setIsDataLoaded(true);
+      // Reset vehicles to start position once data is loaded (only once)
+      if (!hasResetVehiclesRef.current) {
+        // Use setTimeout to avoid immediate state update loop
+        setTimeout(() => {
+          resetVehiclesToStart();
+          hasResetVehiclesRef.current = true;
+        }, 100);
+      }
+    }
+  }, [vehicleCount, leaderboardCount, isDataLoaded]); // Use counts instead of objects
+  
+  // Reset the ref when race is paused/stopped (separate effect)
+  useEffect(() => {
+    if (!isPlaying && hasResetVehiclesRef.current) {
+      hasResetVehiclesRef.current = false;
+    }
+  }, [isPlaying]);
 
   // Get selected vehicle info
   const selectedVehicleInfo = selectedVehicleId ? vehicleInfo[selectedVehicleId] : null;
@@ -112,16 +168,43 @@ export function PlaybackControls() {
   const handlePlay = async (e: React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
     e.stopPropagation();
+    
+    // Don't start if data is not loaded
+    if (!isDataLoaded) {
+      console.log('Waiting for data to load...');
+      return;
+    }
+    
+    // Don't start if already starting
+    if (isStarting) {
+      return;
+    }
+    
+    setIsStarting(true);
+    
     try {
-      // Reset vehicles to start position when starting race
+      // Step 1: Reset race state when starting new race
+      resetRace();
+      
+      // Step 2: Reset vehicles to start position BEFORE starting race
       resetVehiclesToStart();
+      
+      // Step 3: Wait a moment to ensure vehicles are reset
+      await new Promise(resolve => setTimeout(resolve, 200));
+      
+      // Step 4: Restart the race backend
       await restart();
-      // Small delay to ensure restart completes before playing
-      setTimeout(async () => {
-        await play();
-      }, 100);
+      
+      // Step 5: Wait a moment for restart to complete
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Step 6: Now start the race
+      await play();
+      
+      setIsStarting(false);
     } catch (error) {
       console.error('Play failed:', error);
+      setIsStarting(false);
     }
   };
 
@@ -203,12 +286,23 @@ export function PlaybackControls() {
                   relative w-16 h-16 rounded-full flex items-center justify-center
                   transition-all duration-300 transform hover:scale-105 active:scale-95
                   shadow-xl z-10 overflow-hidden group
-                  ${isPaused 
+                  ${!isDataLoaded || isStarting
+                    ? 'bg-gradient-to-br from-gray-600 via-gray-500 to-gray-700 shadow-gray-500/60 border-4 border-gray-400/80 cursor-not-allowed opacity-60'
+                    : isPaused 
                     ? 'bg-gradient-to-br from-green-600 via-green-500 to-green-700 shadow-green-500/60 border-4 border-green-400/80' 
                     : 'bg-gradient-to-br from-red-600 via-red-500 to-red-700 shadow-red-500/60 border-4 border-red-400/80'
                   }
                 `}
-                title={isPaused ? 'Start Engine' : 'Stop Engine'}
+                title={
+                  !isDataLoaded 
+                    ? 'Loading data...' 
+                    : isStarting 
+                    ? 'Starting race...' 
+                    : isPaused 
+                    ? (raceFinished ? 'Race Finished - Click to Start New Race' : 'Start Race') 
+                    : 'Pause Race'
+                }
+                disabled={!isDataLoaded || isStarting}
         type="button"
       >
                 {/* Shine Effect */}
@@ -219,12 +313,28 @@ export function PlaybackControls() {
                 
                 {/* Icon */}
                 <div className="relative z-10">
-                  {isPaused ? (
-                    <Power className="w-6 h-6 text-white fill-white drop-shadow-lg" />
+                  {isStarting ? (
+                    <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  ) : isPaused ? (
+                    <Play className="w-6 h-6 text-white fill-white drop-shadow-lg" />
                   ) : (
                     <Pause className="w-6 h-6 text-white fill-white drop-shadow-lg" />
                   )}
                 </div>
+                
+                {/* Race Finished Indicator */}
+                {raceFinished && winnerVehicleId && !isStarting && (
+                  <div className="absolute -top-2 -right-2 bg-yellow-500 text-black text-[8px] font-bold px-1.5 py-0.5 rounded-full border border-yellow-300">
+                    WINNER
+                  </div>
+                )}
+                
+                {/* Data Loading Indicator */}
+                {!isDataLoaded && (
+                  <div className="absolute -top-2 -left-2 bg-blue-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full border border-blue-300">
+                    LOADING
+                  </div>
+                )}
                 
                 {/* Pulsing Ring Effect */}
                 {isPaused && (
