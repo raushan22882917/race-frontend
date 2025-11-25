@@ -28,6 +28,9 @@ interface TelemetryState {
   // Leaderboard
   leaderboard: LeaderboardEntry[];
   
+  // Race winner
+  raceWinner: { vehicleId: string; timestamp: number } | null;
+  
   // Track Visualization
   showVehiclePaths: boolean;
   showGrid: boolean;
@@ -60,6 +63,7 @@ interface TelemetryState {
   setShowCenterLine: (show: boolean) => void;
   setShowTrackEdges: (show: boolean) => void;
   setCameraPreset: (preset: 'top-down' | 'side' | 'follow' | 'free') => void;
+  setRaceWinner: (winner: { vehicleId: string; timestamp: number } | null) => void;
   reset: () => void;
 }
 
@@ -76,6 +80,7 @@ const initialState: Omit<TelemetryState, 'updateVehicle' | 'updateLeaderboardFro
   playbackSpeed: 1.0,
   lapEvents: {},
   leaderboard: [],
+  raceWinner: null,
   showVehiclePaths: false, // Disabled by default - don't draw paths when vehicles run
   showGrid: false,
   showCheckpoints: false,
@@ -320,6 +325,7 @@ export const useTelemetryStore = create<TelemetryState>((set) => ({
   setShowCenterLine: (show) => set({ showCenterLine: show }),
   setShowTrackEdges: (show) => set({ showTrackEdges: show }),
   setCameraPreset: (preset) => set({ cameraPreset: preset }),
+  setRaceWinner: (winner) => set({ raceWinner: winner }),
 
   reset: () => set(initialState),
 }));

@@ -10,6 +10,7 @@ import { Suspense, useEffect, useRef, useState, useCallback } from 'react';
 import * as THREE from 'three';
 import { RotateCw, ZoomIn, ZoomOut, RefreshCw, LayoutGrid, Eye, EyeOff, Camera, ChevronDown, ChevronUp, Grid3x3, MapPin, Route, Layers, ArrowLeft, ArrowRight, ArrowUp, ArrowDown, Move } from 'lucide-react';
 import { LapEvent } from '../types/telemetry';
+import { getPositionAtProgress } from '../utils/trackPathUtils';
 
 export function Scene3D() {
   const { 
@@ -49,14 +50,23 @@ export function Scene3D() {
   const previousLapCounts = useRef<Record<string, number>>({});
   const previousIsPlaying = useRef<boolean>(false);
   
-  // Reset vehicles to start position when race starts
+  // Reset vehicles to start position when race starts (handled by PlaybackControls)
+  // This effect is kept for safety but PlaybackControls handles the main reset
   useEffect(() => {
     if (isPlaying && !previousIsPlaying.current) {
-      // Race just started - reset all vehicles to start position
-      resetVehiclesToStart();
+      // Race just started - ensure vehicles are at start (PlaybackControls should have already done this)
+      // Only reset if vehicles exist but are not at start position
+      const vehiclesAtStart = Object.values(vehicles).every(v => {
+        const startPos = getPositionAtProgress(0, 0);
+        return Math.abs(v.position.x - startPos.x) < 0.1 && 
+               Math.abs(v.position.z - startPos.z) < 0.1;
+      });
+      if (!vehiclesAtStart && Object.keys(vehicles).length > 0) {
+        resetVehiclesToStart();
+      }
     }
     previousIsPlaying.current = isPlaying;
-  }, [isPlaying, resetVehiclesToStart]);
+  }, [isPlaying, resetVehiclesToStart, vehicles]);
 
   // Update leaderboard positions in real-time based on vehicle track progress
   useEffect(() => {

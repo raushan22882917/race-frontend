@@ -5,14 +5,16 @@ import { useState, useEffect } from 'react';
 import { apiService } from '../services/apiService';
 
 export function PlaybackControls() {
-  const { isPaused, resetVehiclesToStart, vehicles, selectedVehicleId, leaderboard, weather, weatherEnabled } = useTelemetryStore();
+  const { isPaused, isPlaying, resetVehiclesToStart, vehicles, selectedVehicleId, leaderboard, weather, weatherEnabled, raceWinner, setRaceWinner, setPaused } = useTelemetryStore();
   const { play, pause, restart } = useTelemetryService();
   const [vehicleInfo, setVehicleInfo] = useState<Record<string, { driver_number?: number; car_number?: number }>>({});
 
-  // Reset vehicles to start position on mount and when paused
+  // Reset vehicles to start position on mount (only once)
   useEffect(() => {
+    // Reset all vehicles to start position by default when component mounts
     resetVehiclesToStart();
-  }, [resetVehiclesToStart]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run on mount
 
   // Load vehicle info with driver numbers
   useEffect(() => {
@@ -109,15 +111,31 @@ export function PlaybackControls() {
     weather.rain ?? undefined
   ) : null;
 
+  // Auto-pause when winner is detected
+  useEffect(() => {
+    if (raceWinner && isPlaying) {
+      // Auto-pause the race when winner is decided
+      pause().catch((error) => {
+        console.error('Auto-pause failed:', error);
+      });
+    }
+  }, [raceWinner, isPlaying, pause]);
+
   const handlePlay = async (e: React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
     e.stopPropagation();
     try {
-      // Reset vehicles to start position when starting race
+      // Clear previous winner if restarting race
+      setRaceWinner(null);
+      // Reset all vehicles to start position before starting race
       resetVehiclesToStart();
+      // Wait a bit to ensure vehicles are reset
+      await new Promise(resolve => setTimeout(resolve, 200));
+      // Restart the race
       await restart();
       // Small delay to ensure restart completes before playing
       setTimeout(async () => {
+        // Start the race - vehicles will start running
         await play();
       }, 100);
     } catch (error) {
@@ -196,8 +214,8 @@ export function PlaybackControls() {
             </div>
 
             {/* Row 2, Column 1: Play Control Button */}
-            <div className="flex items-center justify-center">
-      <button
+            <div className="flex items-center justify-center pb-6">
+              <button
         onClick={isPaused ? handlePlay : handlePause}
                 className={`
                   relative w-16 h-16 rounded-full flex items-center justify-center
@@ -208,7 +226,7 @@ export function PlaybackControls() {
                     : 'bg-gradient-to-br from-red-600 via-red-500 to-red-700 shadow-red-500/60 border-4 border-red-400/80'
                   }
                 `}
-                title={isPaused ? 'Start Engine' : 'Stop Engine'}
+                title={isPaused ? 'Start Race' : 'Pause Race'}
         type="button"
       >
                 {/* Shine Effect */}
@@ -224,6 +242,13 @@ export function PlaybackControls() {
                   ) : (
                     <Pause className="w-6 h-6 text-white fill-white drop-shadow-lg" />
                   )}
+                </div>
+                
+                {/* Button Label */}
+                <div className="absolute -bottom-6 left-1/2 transform -translate-x-1/2 whitespace-nowrap">
+                  <span className={`text-xs font-bold ${isPaused ? 'text-green-400' : 'text-red-400'}`}>
+                    {isPaused ? 'START RACE' : 'PAUSE'}
+                  </span>
                 </div>
                 
                 {/* Pulsing Ring Effect */}

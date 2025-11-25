@@ -146,7 +146,7 @@ export function TrackMap({ vehicles, showStartFinish = true, showCheckpoints = f
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isMapReady, setIsMapReady] = useState(false);
   const [mapInstance, setMapInstance] = useState<google.maps.Map | null>(null);
-  const { vehiclePaths, isPlaying, vehicles: telemetryVehicles } = useTelemetryStore();
+  const { vehiclePaths, isPlaying, vehicles: telemetryVehicles, setRaceWinner } = useTelemetryStore();
   const [firstFinisher, setFirstFinisher] = useState<FinishCelebration | null>(null);
   const [showWinnerDialog, setShowWinnerDialog] = useState(false);
   const previousProgress = useRef<Record<string, number>>({});
@@ -637,8 +637,10 @@ export function TrackMap({ vehicles, showStartFinish = true, showCheckpoints = f
       setFirstFinisher(null);
       setShowWinnerDialog(false);
       previousProgress.current = {};
+      // Clear winner in store when paused
+      setRaceWinner(null);
     }
-  }, [isPlaying]);
+  }, [isPlaying, setRaceWinner]);
 
   // Detect finish line crossings
   useEffect(() => {
@@ -671,6 +673,8 @@ export function TrackMap({ vehicles, showStartFinish = true, showCheckpoints = f
                 speed: vehicle.speed,
                 heading: vehicle.heading,
               };
+              // Set winner in store to trigger auto-pause
+              setRaceWinner({ vehicleId, timestamp: finisherData.timestamp });
               // Show winner dialog
               setShowWinnerDialog(true);
               return finisherData;
