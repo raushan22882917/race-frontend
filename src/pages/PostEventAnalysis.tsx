@@ -212,7 +212,7 @@ export function PostEventAnalysis() {
       {/* Sidebar Toggle Button */}
       <button
         onClick={() => setSidebarOpen(!sidebarOpen)}
-        className="fixed top-4 right-4 z-40 p-3 bg-gradient-to-br from-purple-600/20 to-blue-600/20 rounded-xl border border-purple-500/30 shadow-lg hover:shadow-xl transition-all hover:scale-105"
+        className="fixed bottom-4 right-4 z-40 p-3 bg-gradient-to-br from-purple-600/20 to-blue-600/20 rounded-xl border border-purple-500/30 shadow-lg hover:shadow-xl transition-all hover:scale-105"
         title="Toggle AI Analysis Sidebar"
       >
         <Brain className={`h-6 w-6 ${sidebarOpen ? 'text-purple-400' : 'text-gray-400'}`} />
