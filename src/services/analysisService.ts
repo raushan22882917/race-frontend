@@ -181,6 +181,12 @@ class AnalysisService {
   async getVehicles() {
     return this.request('/api/vehicles');
   }
+
+  async clearVehicleCache() {
+    return this.request('/api/vehicles/clear-cache', {
+      method: 'POST',
+    });
+  }
 }
 
 export const analysisService = new AnalysisService();

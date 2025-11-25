@@ -4,7 +4,7 @@ import { analysisService } from '../services/analysisService';
 import {
   Car, ChevronDown, ChevronRight, X, Brain, Gauge, LineChart,
   PlayCircle, Target, Square, CornerUpRight, BarChart3, TrendingUp,
-  CheckCircle, AlertCircle, Loader2, Sparkles
+  CheckCircle, AlertCircle, Loader2, Sparkles, RefreshCw
 } from 'lucide-react';
 
 interface Vehicle {
@@ -38,6 +38,8 @@ export function DriverSidebar({
   
   const [vehicleDropdownOpen, setVehicleDropdownOpen] = useState(false);
   const [vehicleInfoMap, setVehicleInfoMap] = useState<Record<string, Vehicle>>({});
+  const [clearingCache, setClearingCache] = useState(false);
+  const [cacheCleared, setCacheCleared] = useState(false);
 
   // Fetch vehicle info from API
   useEffect(() => {
@@ -91,6 +93,36 @@ export function DriverSidebar({
     setStoreSelectedVehicle(vehicleId);
     onVehicleChange?.(vehicleId);
     setVehicleDropdownOpen(false);
+  };
+
+  const handleClearCache = async () => {
+    setClearingCache(true);
+    setCacheCleared(false);
+    try {
+      await analysisService.clearVehicleCache();
+      setCacheCleared(true);
+      // Refresh vehicle info after clearing cache
+      const response = await analysisService.getVehicles() as { vehicles?: any[] };
+      const infoMap: Record<string, Vehicle> = {};
+      response.vehicles?.forEach((v: any) => {
+        infoMap[v.id] = {
+          id: v.id,
+          name: v.name,
+          file: v.file,
+          vehicle_number: v.vehicle_number,
+          car_number: v.car_number,
+          driver_number: v.driver_number,
+          has_endurance_data: v.has_endurance_data
+        };
+      });
+      setVehicleInfoMap(infoMap);
+      // Reset success message after 3 seconds
+      setTimeout(() => setCacheCleared(false), 3000);
+    } catch (error) {
+      console.error('Failed to clear vehicle cache:', error);
+    } finally {
+      setClearingCache(false);
+    }
   };
 
   const pages = [
@@ -188,15 +220,42 @@ export function DriverSidebar({
                     </div>
                   )}
                 </div>
-                {vehicles.length > 0 ? (
-                  <p className="mt-1 text-xs text-[#9db0b9]">
-                    {vehicles.length} vehicle{vehicles.length !== 1 ? 's' : ''} available
-                  </p>
-                ) : (
-                  <p className="mt-1 text-xs text-[#fa5f38]">
-                    No vehicles available. Waiting for telemetry data...
-                  </p>
-                )}
+                <div className="mt-1 flex items-center justify-between">
+                  {vehicles.length > 0 ? (
+                    <p className="text-xs text-[#9db0b9]">
+                      {vehicles.length} vehicle{vehicles.length !== 1 ? 's' : ''} available
+                    </p>
+                  ) : (
+                    <p className="text-xs text-[#fa5f38]">
+                      No vehicles available. Waiting for telemetry data...
+                    </p>
+                  )}
+                  {vehicles.length > 0 && (
+                    <button
+                      onClick={handleClearCache}
+                      disabled={clearingCache}
+                      className="flex items-center gap-1 px-2 py-1 text-xs text-[#9db0b9] hover:text-blue-400 hover:bg-[#283339] rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Clear vehicle cache (forces reload from files)"
+                    >
+                      {clearingCache ? (
+                        <>
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                          <span>Clearing...</span>
+                        </>
+                      ) : cacheCleared ? (
+                        <>
+                          <CheckCircle className="h-3 w-3 text-green-400" />
+                          <span className="text-green-400">Cleared</span>
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCw className="h-3 w-3" />
+                          <span>Clear Cache</span>
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
               </div>
               
               {/* Selected Vehicle Info */}

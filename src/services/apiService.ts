@@ -170,6 +170,12 @@ class ApiService {
     return this.request(url);
   }
 
+  async clearVehicleCache() {
+    return this.request('/api/vehicles/clear-cache', {
+      method: 'POST',
+    });
+  }
+
   async getEvents() {
     return this.request('/api/events');
   }
