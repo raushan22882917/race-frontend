@@ -21,8 +21,6 @@ interface TelemetryState {
   isPlaying: boolean;
   isPaused: boolean;
   playbackSpeed: number;
-  raceFinished: boolean;
-  winnerVehicleId: string | null;
   
   // Lap events
   lapEvents: Record<string, LapEvent[]>;
@@ -52,8 +50,6 @@ interface TelemetryState {
   setPlaying: (playing: boolean) => void;
   setPaused: (paused: boolean) => void;
   setPlaybackSpeed: (speed: number) => void;
-  setRaceFinished: (finished: boolean, winnerId?: string | null) => void;
-  resetRace: () => void;
   addLapEvent: (event: LapEvent) => void;
   updateLeaderboard: (entry: LeaderboardEntry) => void;
   resetVehiclesToStart: () => void;
@@ -67,7 +63,7 @@ interface TelemetryState {
   reset: () => void;
 }
 
-const initialState: Omit<TelemetryState, 'updateVehicle' | 'updateLeaderboardFromVehicles' | 'addVehiclePathPoint' | 'clearVehiclePath' | 'autoSelectFirstVehicle' | 'setSelectedVehicle' | 'setShowAllVehicles' | 'setWeather' | 'setWeatherEnabled' | 'setPlaying' | 'setPaused' | 'setPlaybackSpeed' | 'addLapEvent' | 'updateLeaderboard' | 'resetVehiclesToStart' | 'setShowVehiclePaths' | 'setShowGrid' | 'setShowCheckpoints' | 'setShowTurnMarkers' | 'setShowCenterLine' | 'setShowTrackEdges' | 'setCameraPreset' | 'setRaceFinished' | 'resetRace' | 'reset'> = {
+const initialState: Omit<TelemetryState, 'updateVehicle' | 'updateLeaderboardFromVehicles' | 'addVehiclePathPoint' | 'clearVehiclePath' | 'autoSelectFirstVehicle' | 'setSelectedVehicle' | 'setShowAllVehicles' | 'setWeather' | 'setWeatherEnabled' | 'setPlaying' | 'setPaused' | 'setPlaybackSpeed' | 'addLapEvent' | 'updateLeaderboard' | 'resetVehiclesToStart' | 'setShowVehiclePaths' | 'setShowGrid' | 'setShowCheckpoints' | 'setShowTurnMarkers' | 'setShowCenterLine' | 'setShowTrackEdges' | 'setCameraPreset' | 'reset'> = {
   vehicles: {},
   selectedVehicleId: null,
   showAllVehicles: true, // Default to showing all vehicles
@@ -78,8 +74,6 @@ const initialState: Omit<TelemetryState, 'updateVehicle' | 'updateLeaderboardFro
   isPlaying: false,
   isPaused: true,
   playbackSpeed: 1.0,
-  raceFinished: false,
-  winnerVehicleId: null,
   lapEvents: {},
   leaderboard: [],
   showVehiclePaths: false, // Disabled by default - don't draw paths when vehicles run
@@ -196,12 +190,6 @@ export const useTelemetryStore = create<TelemetryState>((set) => ({
 
   setPlaybackSpeed: (speed) =>
     set({ playbackSpeed: speed }),
-
-  setRaceFinished: (finished, winnerId = null) =>
-    set({ raceFinished: finished, winnerVehicleId: winnerId }),
-
-  resetRace: () =>
-    set({ raceFinished: false, winnerVehicleId: null }),
 
   addLapEvent: (event) =>
     set((state) => {

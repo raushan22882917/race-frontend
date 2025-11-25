@@ -2,8 +2,6 @@ import { useMemo, useState, useEffect, useRef } from 'react';
 import { GoogleMap, useLoadScript, Polyline, Polygon, Marker } from '@react-google-maps/api';
 import trackData from '../data/track.json';
 import { useTelemetryStore } from '../store/telemetryStore';
-import { useModal } from '../contexts/ModalContext';
-import { apiService } from '../services/apiService';
 import { getTrackProgress } from '../utils/trackPathUtils';
 import { geoToUnity } from '../utils/gpsUtils';
 
@@ -148,30 +146,10 @@ export function TrackMap({ vehicles, showStartFinish = true, showCheckpoints = f
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isMapReady, setIsMapReady] = useState(false);
   const [mapInstance, setMapInstance] = useState<google.maps.Map | null>(null);
-  const { vehiclePaths, isPlaying, vehicles: telemetryVehicles, setRaceFinished, resetRace, leaderboard } = useTelemetryStore();
-  const { setShowLeaderboard } = useModal();
+  const { vehiclePaths, isPlaying, vehicles: telemetryVehicles } = useTelemetryStore();
   const [firstFinisher, setFirstFinisher] = useState<FinishCelebration | null>(null);
   const [showWinnerDialog, setShowWinnerDialog] = useState(false);
-  const [allVehicles, setAllVehicles] = useState<Array<{ id: string; name?: string }>>([]);
   const previousProgress = useRef<Record<string, number>>({});
-  
-  // Load all vehicles from API
-  useEffect(() => {
-    const loadAllVehicles = async () => {
-      try {
-        const data = await apiService.getVehicles() as { vehicles?: Array<{ id: string; name?: string }> };
-        if (data.vehicles) {
-          setAllVehicles(data.vehicles);
-        }
-      } catch (err) {
-        console.error('Failed to load vehicles:', err);
-      }
-    };
-    loadAllVehicles();
-    // Refresh every 30 seconds
-    const interval = setInterval(loadAllVehicles, 30000);
-    return () => clearInterval(interval);
-  }, []);
 
   // Create hardcoded vehicle icon - stylized racing car pointing in direction of travel
   const createVehicleIcon = (color: string, heading: number): google.maps.Icon | undefined => {
@@ -652,44 +630,15 @@ export function TrackMap({ vehicles, showStartFinish = true, showCheckpoints = f
   // Start/Finish marker
   const startFinishPoint = trackPath[0];
   const finishPoint = trackPath[trackPath.length - 1];
-  
-  // Combine vehicles from store with all vehicles from API for display
-  const vehiclesToShow = useMemo(() => {
-    if (isPlaying && vehicles && Object.keys(vehicles).length > 0) {
-      // During race, show vehicles from store
-      return Object.entries(vehicles).map(([vehicleId, vehicle]) => ({
-        vehicleId,
-        vehicle,
-        hasData: true,
-      }));
-    } else if (!isPlaying && allVehicles.length > 0) {
-      // Before race, show all vehicles from API at start point
-      return allVehicles.map((v) => ({
-        vehicleId: v.id,
-        vehicle: vehicles?.[v.id] || null,
-        hasData: false,
-      }));
-    } else if (vehicles && Object.keys(vehicles).length > 0) {
-      // Fallback to vehicles from store
-      return Object.entries(vehicles).map(([vehicleId, vehicle]) => ({
-        vehicleId,
-        vehicle,
-        hasData: true,
-      }));
-    }
-    return [];
-  }, [vehicles, allVehicles, isPlaying]);
 
-  // Clear celebrations and progress when paused or race is reset
+  // Clear celebrations and progress when paused
   useEffect(() => {
     if (!isPlaying) {
       setFirstFinisher(null);
       setShowWinnerDialog(false);
       previousProgress.current = {};
-      // Reset race state when paused
-      resetRace();
     }
-  }, [isPlaying, resetRace]);
+  }, [isPlaying]);
 
   // Detect finish line crossings
   useEffect(() => {
@@ -722,10 +671,6 @@ export function TrackMap({ vehicles, showStartFinish = true, showCheckpoints = f
                 speed: vehicle.speed,
                 heading: vehicle.heading,
               };
-              // Mark race as finished and set winner
-              setRaceFinished(true, vehicleId);
-              // Show leaderboard when winner is decided
-              setShowLeaderboard(true);
               // Show winner dialog
               setShowWinnerDialog(true);
               return finisherData;
@@ -866,20 +811,14 @@ export function TrackMap({ vehicles, showStartFinish = true, showCheckpoints = f
 
   return (
     <>
-      {/* Winner Celebration Dialog Card */}
+      {/* Winner Dialog Card */}
       {showWinnerDialog && firstFinisher && (
-        <div className="fixed inset-0 z-[3000] flex items-center justify-center bg-black bg-opacity-70 backdrop-blur-sm">
-          {/* Animated background effects */}
-          <div className="absolute inset-0 overflow-hidden">
-            <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-yellow-500/20 rounded-full blur-3xl animate-pulse"></div>
-            <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-orange-500/20 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }}></div>
-          </div>
-          
-          <div className="bg-gradient-to-br from-yellow-900 via-yellow-800 to-orange-900 rounded-2xl shadow-2xl border-4 border-yellow-500 p-8 max-w-lg w-full mx-4 relative transform scale-100 animate-pulse">
+        <div className="fixed inset-0 z-[3000] flex items-center justify-center bg-black bg-opacity-50">
+          <div className="bg-gradient-to-br from-yellow-900 via-yellow-800 to-orange-900 rounded-xl shadow-2xl border-4 border-yellow-500 p-8 max-w-md w-full mx-4 relative">
             {/* Close button */}
             <button
               onClick={() => setShowWinnerDialog(false)}
-              className="absolute top-4 right-4 text-white hover:text-yellow-300 transition-colors z-10 bg-black/30 rounded-full p-2 hover:bg-black/50"
+              className="absolute top-4 right-4 text-white hover:text-yellow-300 transition-colors"
               aria-label="Close"
             >
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -887,12 +826,11 @@ export function TrackMap({ vehicles, showStartFinish = true, showCheckpoints = f
               </svg>
             </button>
 
-            {/* Winner Header with animation */}
-            <div className="text-center mb-6 relative z-10">
-              <div className="text-8xl mb-4 animate-bounce">🏆</div>
-              <h2 className="text-4xl font-bold text-white mb-2 animate-pulse">WINNER!</h2>
-              <div className="text-yellow-300 text-2xl font-semibold mb-1">Vehicle #{firstFinisher.vehicleId}</div>
-              <div className="text-yellow-200 text-lg">First to Cross the Finish Line</div>
+            {/* Winner Header */}
+            <div className="text-center mb-6">
+              <div className="text-6xl mb-4">🏆</div>
+              <h2 className="text-3xl font-bold text-white mb-2">FIRST FINISHER!</h2>
+              <div className="text-yellow-300 text-xl font-semibold">Vehicle #{firstFinisher.vehicleId}</div>
             </div>
 
             {/* Winner Details */}
@@ -937,56 +875,25 @@ export function TrackMap({ vehicles, showStartFinish = true, showCheckpoints = f
                 </>
               )}
 
-              {/* Leaderboard Position */}
-              {(() => {
-                const leaderboardEntry = leaderboard.find(e => e.vehicle_id === firstFinisher.vehicleId);
-                return (
-                  <div className="pt-4 border-t border-yellow-500 border-opacity-30">
-                    <div className="text-gray-300 text-sm mb-1">Finish Position</div>
-                    <div className="text-yellow-300 font-bold text-3xl flex items-center justify-center gap-2">
-                      <span className="text-4xl">🥇</span>
-                      <span>1st Place</span>
-                    </div>
-                    {leaderboardEntry && (
-                      <div className="mt-2 text-sm text-gray-300">
-                        {leaderboardEntry.laps && <span>Completed {leaderboardEntry.laps} laps</span>}
-                        {leaderboardEntry.best_lap_time && (
-                          <span className="ml-2">Best Lap: {leaderboardEntry.best_lap_time}</span>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
+              <div className="pt-4 border-t border-yellow-500 border-opacity-30">
+                <div className="text-gray-300 text-sm mb-1">Finish Position</div>
+                <div className="text-yellow-300 font-bold text-2xl">1st Place</div>
+              </div>
 
               {firstFinisher.timestamp && (
-                <div className="text-gray-400 text-xs mt-4 text-center">
+                <div className="text-gray-400 text-xs mt-4">
                   Finished at: {new Date(firstFinisher.timestamp).toLocaleTimeString()}
                 </div>
               )}
             </div>
 
-            {/* Action Buttons */}
-            <div className="mt-6 flex gap-3">
-              <button
-                onClick={() => {
-                  setShowWinnerDialog(false);
-                  setShowLeaderboard(true);
-                }}
-                className="flex-1 bg-yellow-500 hover:bg-yellow-600 text-black font-bold py-3 px-6 rounded-lg transition-colors flex items-center justify-center gap-2"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
-                </svg>
-                View Leaderboard
-              </button>
-              <button
-                onClick={() => setShowWinnerDialog(false)}
-                className="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 px-6 rounded-lg transition-colors"
-              >
-                Close
-              </button>
-            </div>
+            {/* Action Button */}
+            <button
+              onClick={() => setShowWinnerDialog(false)}
+              className="mt-6 w-full bg-yellow-500 hover:bg-yellow-600 text-black font-bold py-3 px-6 rounded-lg transition-colors"
+            >
+              Close
+            </button>
           </div>
         </div>
       )}
@@ -1139,81 +1046,68 @@ export function TrackMap({ vehicles, showStartFinish = true, showCheckpoints = f
         })}
 
         {/* Vehicle Markers - Show ALL vehicles with real icons, projected onto track */}
-        {vehiclesToShow.length > 0 && (
+        {vehicles && Object.keys(vehicles).length > 0 && (
           <>
-            {vehiclesToShow.map(({ vehicleId, vehicle: vehicleData, hasData }) => {
-                // Determine position: use start point if race hasn't started, otherwise use vehicle GPS position
-                let vehiclePosition: { lat: number; lng: number };
-                let heading = 0;
-                let speed = 0;
-                
-                // Get GPS coordinates from telemetry data
-                const gpsLat = vehicleData?.telemetry?.gps_lat;
-                const gpsLon = vehicleData?.telemetry?.gps_lon;
-                const hasGpsData = gpsLat != null && gpsLon != null && !isNaN(gpsLat) && !isNaN(gpsLon);
-                
-                if (!isPlaying || !hasData || !hasGpsData) {
-                  // Race not started or vehicle has no GPS data - use start point
-                  vehiclePosition = trackPath.length > 0 ? trackPath[0] : { lat: 0, lng: 0 };
-                  heading = 0; // Default heading
-                  speed = 0;
-                } else {
-                  // Race is playing and vehicle has GPS data - use actual GPS position
-                  // Project vehicle position onto the nearest point on the track
-                  vehiclePosition = projectToTrack(gpsLat, gpsLon);
-                  
-                  // Calculate heading from rotation (rotation.y is in radians)
-                  if (vehicleData.rotation?.y !== undefined && vehicleData.rotation.y != null) {
-                    // Convert rotation from radians to degrees, then adjust for map heading (0° = North)
-                    heading = (vehicleData.rotation.y * 180) / Math.PI;
-                    if (heading < 0) heading += 360;
-                    // Convert from Unity rotation (0° = forward/Z+) to map heading (0° = North)
-                    heading = (heading + 90) % 360;
-                  }
-                  
-                  // Get speed from telemetry
-                  speed = vehicleData.telemetry?.speed || 0;
-                }
+            {Object.entries(vehicles).map(([vehicleId, vehicle]) => {
+              // Skip if no valid position
+              if (!vehicle.position || 
+                  vehicle.position.lat == null || 
+                  vehicle.position.lng == null ||
+                  isNaN(vehicle.position.lat) ||
+                  isNaN(vehicle.position.lng)) {
+                return null;
+              }
 
-                const vehicleColor = getVehicleColor(vehicleId);
+              // Project vehicle position onto the nearest point on the track
+              const projectedPosition = projectToTrack(vehicle.position.lat, vehicle.position.lng);
 
-                const googleMaps = window.google?.maps;
-                if (!googleMaps) return null;
-                
-                // Use simple vehicle icon pointing in direction of travel
-                const iconConfig = createVehicleIcon(vehicleColor, heading);
-                
-                // Create label card icon for vehicle number and speed
-                const labelIconConfig = createVehicleLabelIcon(vehicleId, speed, vehicleColor);
-                
-                // Calculate position for label (above the vehicle)
-                const labelOffset = 0.00015; // Offset in degrees to position label above vehicle
-                const labelPosition = {
-                  lat: vehiclePosition.lat + labelOffset,
-                  lng: vehiclePosition.lng,
-                };
+              // Calculate heading in degrees
+            let heading = 0;
+              if (vehicle.heading !== undefined && vehicle.heading != null) {
+              heading = (vehicle.heading * 180) / Math.PI;
+              if (heading < 0) heading += 360;
+            }
 
-                return (
-                  <>
-                    {/* Vehicle icon marker */}
-                    <Marker
-                      key={`vehicle-${vehicleId}`}
-                      position={vehiclePosition}
-                      icon={iconConfig}
-                      title={isPlaying ? `Race Car #${vehicleId}\nSpeed: ${speed.toFixed(1)} km/h` : `Vehicle #${vehicleId} - Ready`}
-                      zIndex={1000}
-                    />
-                    {/* Label card marker showing vehicle number and speed */}
-                    <Marker
-                      key={`vehicle-label-${vehicleId}`}
-                      position={labelPosition}
-                      icon={labelIconConfig}
-                      title={`Vehicle #${vehicleId} - ${speed.toFixed(1)} km/h`}
-                      zIndex={1001}
-                    />
-                  </>
-                );
-              })}
+              const vehicleColor = getVehicleColor(vehicleId);
+              const speed = vehicle.speed || 0;
+
+              const googleMaps = window.google?.maps;
+              if (!googleMaps) return null;
+              
+              // Use simple vehicle icon pointing in direction of travel
+              const iconConfig = createVehicleIcon(vehicleColor, heading);
+              
+              // Create label card icon for vehicle number and speed
+              const labelIconConfig = createVehicleLabelIcon(vehicleId, speed, vehicleColor);
+              
+              // Calculate position for label (above the vehicle)
+              const labelOffset = 0.00015; // Offset in degrees to position label above vehicle
+              const labelPosition = {
+                lat: projectedPosition.lat + labelOffset,
+                lng: projectedPosition.lng,
+              };
+
+            return (
+              <>
+                {/* Vehicle icon marker */}
+              <Marker
+                key={`vehicle-${vehicleId}`}
+                position={projectedPosition}
+                icon={iconConfig}
+                title={`Race Car #${vehicleId}\nSpeed: ${speed.toFixed(1)} km/h`}
+                zIndex={1000}
+              />
+                {/* Label card marker showing vehicle number and speed */}
+                <Marker
+                  key={`vehicle-label-${vehicleId}`}
+                  position={labelPosition}
+                  icon={labelIconConfig}
+                  title={`Vehicle #${vehicleId} - ${speed.toFixed(1)} km/h`}
+                  zIndex={1001}
+                />
+              </>
+            );
+            })}
           </>
         )}
 

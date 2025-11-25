@@ -1,6 +1,5 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { useTelemetryStore } from '../store/telemetryStore';
-import { apiService } from '../services/apiService';
 import { Car, ChevronLeft, ChevronRight } from 'lucide-react';
 
 // Vehicle colors for icons - matching TrackMap colors
@@ -106,82 +105,21 @@ function VehicleImage({ vehicleId, vehicleName, isSelected, size = 'md' }: { veh
 
 export function VehicleList() {
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const { vehicles, leaderboard, selectedVehicleId, setSelectedVehicle, isPlaying } = useTelemetryStore();
+  const { vehicles, leaderboard, selectedVehicleId, setSelectedVehicle } = useTelemetryStore();
   
-  // Load all vehicles from API
-  const [allVehicles, setAllVehicles] = useState<Array<{ id: string; name?: string; vehicle_number?: number; car_number?: number; driver_number?: number }>>([]);
-  
-  useEffect(() => {
-    const loadAllVehicles = async () => {
-      try {
-        const data = await apiService.getVehicles() as { vehicles?: Array<{ id: string; name?: string; vehicle_number?: number; car_number?: number; driver_number?: number }> };
-        if (data.vehicles) {
-          setAllVehicles(data.vehicles);
-        }
-      } catch (err) {
-        console.error('Failed to load vehicles:', err);
-      }
-    };
-    loadAllVehicles();
-    // Refresh every 30 seconds
-    const interval = setInterval(loadAllVehicles, 30000);
-    return () => clearInterval(interval);
-  }, []);
-  
-  // Combine vehicles from store with all vehicles from API
-  const sortedVehicles = useMemo(() => {
-    // Create a map of vehicles from store
-    const storeVehiclesMap = new Map(Object.keys(vehicles).map(vehicleId => [vehicleId, vehicles[vehicleId]]));
-    
-    // Create entries for all vehicles
-    const allVehicleEntries = allVehicles.map(vehicle => {
-      const storeVehicle = storeVehiclesMap.get(vehicle.id);
-      const leaderboardEntry = leaderboard.find(e => e.vehicle_id === vehicle.id);
-      
+  // Get vehicles sorted by position from leaderboard
+  const sortedVehicles = Object.entries(vehicles)
+    .map(([vehicleId, vehicle]) => {
+      const leaderboardEntry = leaderboard.find(e => e.vehicle_id === vehicleId);
       return {
-        vehicleId: vehicle.id,
-        vehicle: storeVehicle, // May be undefined if race hasn't started
-        position: leaderboardEntry?.position || (isPlaying ? 999 : 0),
-        vehicleName: leaderboardEntry?.vehicle || vehicle.name || vehicle.id,
+        vehicleId,
+        vehicle,
+        position: leaderboardEntry?.position || 999,
+        vehicleName: leaderboardEntry?.vehicle || vehicleId,
         leaderboardEntry,
-        hasData: !!storeVehicle, // Track if vehicle has telemetry data
       };
-    });
-    
-    // If no vehicles from API, use vehicles from store
-    if (allVehicleEntries.length === 0) {
-      return Object.entries(vehicles)
-        .map(([vehicleId, vehicle]) => {
-          const leaderboardEntry = leaderboard.find(e => e.vehicle_id === vehicleId);
-          return {
-            vehicleId,
-            vehicle,
-            position: leaderboardEntry?.position || (isPlaying ? 999 : 0),
-            vehicleName: leaderboardEntry?.vehicle || vehicleId,
-            leaderboardEntry,
-            hasData: true,
-          };
-        })
-        .sort((a, b) => {
-          // If race is playing, sort by position
-          if (isPlaying) {
-            return a.position - b.position;
-          }
-          // Otherwise sort by vehicle ID
-          return a.vehicleId.localeCompare(b.vehicleId);
-        });
-    }
-    
-    // Sort vehicles
-    return allVehicleEntries.sort((a, b) => {
-      // If race is playing, sort by position
-      if (isPlaying) {
-        return a.position - b.position;
-      }
-      // Otherwise sort by vehicle ID
-      return a.vehicleId.localeCompare(b.vehicleId);
-    });
-  }, [vehicles, leaderboard, allVehicles, isPlaying]);
+    })
+    .sort((a, b) => a.position - b.position);
 
   if (sortedVehicles.length === 0) {
     return (
@@ -241,14 +179,10 @@ export function VehicleList() {
                     }
                     hover:scale-[1.02] active:scale-[0.98]
                   `}
-                  title={
-                    isPlaying && position !== 999 && position > 0
-                      ? `${vehicleName} - Position ${position}`
-                      : vehicleName
-                  }
+                  title={position !== 999 ? `${vehicleName} - Position ${position}` : vehicleName}
                 >
-                  {/* Position Badge - Show if race is playing and position is valid */}
-                  {isPlaying && position !== 999 && position > 0 && (
+                  {/* Position Badge - Only show if position is valid (not 999) */}
+                  {position !== 999 && (
                     <div className={`
                       flex items-center justify-center w-5 h-5 rounded text-[10px] font-bold flex-shrink-0
                       ${position === 1 ? 'bg-yellow-500 text-yellow-900' :
@@ -258,12 +192,6 @@ export function VehicleList() {
                       }
                     `}>
                       {position}
-                    </div>
-                  )}
-                  {/* Show "#" placeholder when race hasn't started */}
-                  {!isPlaying && (
-                    <div className="flex items-center justify-center w-5 h-5 rounded text-[10px] font-bold flex-shrink-0 bg-gray-600/50 text-gray-400">
-                      #
                     </div>
                   )}
 
@@ -311,11 +239,7 @@ export function VehicleList() {
                   }
                   hover:scale-105 active:scale-95 flex items-center justify-center
                 `}
-                title={
-                  isPlaying && position !== 999 && position > 0
-                    ? `Position ${position} - ${vehicleName}`
-                    : vehicleName
-                }
+                title={position !== 999 ? `Position ${position} - ${vehicleName}` : vehicleName}
               >
                 <VehicleImage vehicleId={vehicleId} vehicleName={vehicleName} isSelected={isSelected} size="sm" />
                 {isSelected && (
