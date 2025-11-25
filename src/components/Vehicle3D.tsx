@@ -1,6 +1,6 @@
 import { useFrame } from '@react-three/fiber';
 import { useRef } from 'react';
-import { Group } from 'three';
+import { Group, Mesh } from 'three';
 import * as THREE from 'three';
 import { useTelemetryStore } from '../store/telemetryStore';
 import { Text } from '@react-three/drei';
